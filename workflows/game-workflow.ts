@@ -4,22 +4,90 @@ import {
   processGameDay,
   setupGame,
 } from "@/lib/game-engine";
-import { GameConfig, GameState, PlayerOutputs } from "@/lib/types";
+import { GameConfig, GameState, Player, PlayerOutputs } from "@/lib/types";
 import { getWritable } from "workflow";
 import { aiPlayerStep } from "./ai-player-step";
+import { chooseAlchemistName } from "./name-step";
 
 export async function gameWorkflow(config: GameConfig) {
   "use workflow";
   const writable = getWritable();
-  const game = setupGame(config.generation);
-  let gameState = initializeGameState(config.runtime);
+
+  // Step 1: Each AI chooses their alchemist name
+  console.log(
+    `[Game] Choosing names for ${config.runtime.players.length} players...`
+  );
+
+  const nameResults = await Promise.all(
+    config.runtime.players.map((player) => chooseAlchemistName(player.model))
+  );
+
+  // Track disqualified players from name generation
+  const disqualified: { playerIdx: number; reason: string }[] = [];
+  const namedPlayers: Player[] = config.runtime.players.map((player, idx) => {
+    const result = nameResults[idx];
+    if (!result.success && result.error) {
+      disqualified.push({ playerIdx: idx, reason: result.error });
+    }
+    return { ...player, name: result.name };
+  });
+
+  if (disqualified.length > 0) {
+    console.log(`[Game] ⚠ ${disqualified.length} disqualified in name phase`);
+  }
+
+  // Update config with chosen names
+  const updatedConfig: GameConfig = {
+    ...config,
+    runtime: { ...config.runtime, players: namedPlayers },
+  };
+
+  const game = setupGame(updatedConfig.generation);
+  let gameState = initializeGameState(updatedConfig.runtime);
+
+  // Include player names and disqualification status in initial state for UI
+  gameState = {
+    ...gameState,
+    playerNames: namedPlayers.map((p) => p.name),
+    disqualifiedPlayers: disqualified,
+  };
   await streamContentToClient(writable, gameState);
 
-  for (let day = 1; day <= config.generation.days; day++) {
-    console.log(`Starting day ${day} of ${config.generation.days}`);
-    const promises = config.runtime.players.map(async (player, idx) => {
-      const playerInput = getPlayerInputs(game, config, day, gameState, idx);
-      return aiPlayerStep(playerInput, player.model);
+  for (let day = 1; day <= updatedConfig.generation.days; day++) {
+    console.log(`Starting day ${day} of ${updatedConfig.generation.days}`);
+    const disqualifiedIdxs = new Set(disqualified.map((d) => d.playerIdx));
+
+    const promises = updatedConfig.runtime.players.map(async (player, idx) => {
+      const isDisqualified = disqualifiedIdxs.has(idx);
+      const playerInput = getPlayerInputs(
+        game,
+        updatedConfig,
+        day,
+        gameState,
+        idx
+      );
+      const result = await aiPlayerStep(
+        playerInput,
+        player.model,
+        isDisqualified
+      );
+
+      // Log result status for debugging
+      console.log(
+        `[Game] Player ${idx} result: success=${result.success}, error=${
+          result.error || "none"
+        }`
+      );
+
+      // If this step failed, disqualify the player for future rounds
+      if (!result.success && result.error && !isDisqualified) {
+        console.log(
+          `[Game] ⚠ Disqualifying player ${idx} (${player.model}): ${result.error}`
+        );
+        disqualified.push({ playerIdx: idx, reason: result.error });
+      }
+
+      return result.outputs;
     });
     const playerOutputs = await Promise.all(promises);
     gameState = processGameDay(
@@ -27,6 +95,8 @@ export async function gameWorkflow(config: GameConfig) {
       gameState,
       game
     );
+    // Update disqualification status in game state
+    gameState = { ...gameState, disqualifiedPlayers: disqualified };
     await streamContentToClient(writable, gameState);
   }
 

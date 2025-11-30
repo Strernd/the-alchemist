@@ -22,8 +22,11 @@ export default function Home() {
     reset,
   } = useGameStream();
 
-  const handleStartGame = (selectedPlayers: Player[], customSeed?: string) => {
-    startGame(selectedPlayers, customSeed);
+  const handleStartGame = (
+    selectedPlayers: Player[],
+    options?: { seed?: string; days?: number }
+  ) => {
+    startGame(selectedPlayers, options);
   };
 
   if (phase === "setup") {

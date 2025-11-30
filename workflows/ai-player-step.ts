@@ -1,57 +1,88 @@
-import { PlayerInputs, playerOutputsSchema } from "@/lib/types";
+import {
+  HerbId,
+  PlayerInputs,
+  PlayerOutputs,
+  playerOutputsSchema,
+  PotionId,
+} from "@/lib/types";
 import { generateObject } from "ai";
-import { PLAYER_SYSTEM_PROMPT } from "./prompts";
+import {
+  formatInventory,
+  getCraftableWithCurrentHerbs,
+  getCraftingOpportunities,
+  PLAYER_SYSTEM_PROMPT,
+  summarizeDemand,
+} from "./prompts";
 
-export async function aiPlayerStep(inputs: PlayerInputs, modelId: string) {
+export type PlayerStepResult = {
+  outputs: PlayerOutputs;
+  success: boolean;
+  error?: string;
+};
+
+const EMPTY_OUTPUTS: PlayerOutputs = {
+  buyHerbs: [],
+  makePotions: [],
+  potionOffers: [],
+};
+
+export async function aiPlayerStep(
+  inputs: PlayerInputs,
+  modelId: string,
+  isDisqualified: boolean
+): Promise<PlayerStepResult> {
   "use step";
 
-  const userPrompt = `
-There are total ${inputs.meta.playCount} players in the game. Today is day ${
-    inputs.meta.currentDay
-  } of ${inputs.meta.totalDays}.
+  // Skip disqualified players - return empty outputs
+  if (isDisqualified) {
+    return { outputs: EMPTY_OUTPUTS, success: true };
+  }
 
-Your inventory:
-Silver: ${inputs.inventory.silver}
-Herbs: ${Object.entries(inputs.inventory.herbs)
-    .map(([herbId, qty]) => `${herbId}: ${qty}`)
-    .join(", ")}
-Potions: ${Object.entries(inputs.inventory.potions)
-    .map(([potionId, qty]) => `${potionId}: ${qty}`)
-    .join(", ")}
+  const craftableNow = getCraftableWithCurrentHerbs(inputs.inventory.herbs);
+  const craftingOpps = getCraftingOpportunities(
+    inputs.inventory.silver,
+    inputs.dailyPrices,
+    inputs.inventory.herbs
+  );
 
-Daily herb prices:
-${Object.entries(inputs.dailyPrices)
-  .map(([herbId, price]) => `${herbId}: ${price}`)
-  .join(", ")}
+  const existingPotions = Object.entries(inputs.inventory.potions)
+    .filter(([, qty]) => qty > 0)
+    .map(([id, qty]) => `${id}:${qty}`)
+    .join(", ");
 
-Historic demands:
-${inputs.historicDemands
-  .map(
-    (demands, idx) =>
-      `Day ${idx + 1}: ${Object.entries(demands)
-        .map(
-          ([herbId, demand]) =>
-            `${herbId}: ${demand.fulfilled} fulfilled / ${demand.remaining} remaining (highest price: ${demand.highestPrice}, lowest price: ${demand.lowestPrice})`
-        )
-        .join("\n")}`
-  )
-  .join("\n")}
+  const userPrompt = `Day ${inputs.meta.currentDay}/${
+    inputs.meta.totalDays
+  } | ${inputs.meta.playCount} players | ${inputs.inventory.silver}g
 
-Yesterday's errors:
-${inputs.yesterdaysErrors.join("\n")}
+INVENTORY: ${formatInventory(inputs.inventory)}
 
-Yesterday's executed offers:
-${inputs.yesterdaysExecutedOffers
-  .map(
-    (offer) =>
-      `${offer.potionId}: ${offer.actuallySold}/${offer.qty} sold at ${offer.price}`
-  )
-  .join("\n")}
+CRAFTING (cost sorted):
+${craftingOpps}
 
-Select your actions for today.
-    `;
-  console.log("Prompting model: ", modelId);
-  console.log(userPrompt);
+POTIONS TO SELL: ${existingPotions || "None"}
+CRAFTABLE NOW: ${craftableNow}
+
+MARKET: ${summarizeDemand(inputs.historicDemands)}
+${
+  inputs.yesterdaysErrors.length > 0
+    ? `ERRORS: ${inputs.yesterdaysErrors.join("; ")}`
+    : ""
+}
+${
+  inputs.yesterdaysExecutedOffers.length > 0
+    ? `SALES: ${inputs.yesterdaysExecutedOffers
+        .map((o) => `${o.potionId}:${o.actuallySold}/${o.qty}@${o.price}g`)
+        .join(", ")}`
+    : ""
+}
+${
+  inputs.meta.currentDay === inputs.meta.totalDays
+    ? "FINAL DAY - sell everything!"
+    : ""
+}
+`;
+
+  console.log("Prompting model:", modelId);
 
   try {
     const { object } = await generateObject({
@@ -59,17 +90,106 @@ Select your actions for today.
       schema: playerOutputsSchema,
       system: PLAYER_SYSTEM_PROMPT,
       prompt: userPrompt,
-      maxOutputTokens: 1000,
+      maxOutputTokens: 1500,
     });
 
-    console.log("Model response: ", object);
-    return object;
-  } catch (error) {
-    console.error("Error prompting model: ", error);
+    const sanitized = sanitizeAIResponse(object);
+    console.log("Model response sanitized:", sanitized);
+
+    return { outputs: sanitized, success: true };
+  } catch (error: unknown) {
+    // Extract useful info from AI_NoObjectGeneratedError
+    const err = error as {
+      name?: string;
+      message?: string;
+      text?: string;
+      finishReason?: string;
+      cause?: Error;
+    };
+
+    console.error(`[Step] ✗ ${modelId} FAILED`);
+    console.error(`[Step]   reason: ${err.finishReason || "unknown"}`);
+    console.error(`[Step]   raw text: ${err.text?.slice(0, 200) || "none"}`);
+    if (err.cause) {
+      console.error(`[Step]   cause: ${err.cause.message || err.cause}`);
+    }
+
+    const errorMsg = err.message || "Unknown error";
+    const errorResult = `${err.finishReason || "error"}: ${errorMsg.slice(
+      0,
+      100
+    )}`;
+    console.log(`[Step] Returning failure result with error: ${errorResult}`);
     return {
-      buyHerbs: [],
-      makePotions: [],
-      potionOffers: [],
+      outputs: EMPTY_OUTPUTS,
+      success: false,
+      error: errorResult,
     };
   }
+}
+
+// Pre-validate AI response to catch obvious mistakes
+function sanitizeAIResponse(response: {
+  buyHerbs: { herbId: string; qty: number }[];
+  makePotions: { potionId: string; qty: number }[];
+  potionOffers: { potionId: string; price: number; qty: number }[];
+}): PlayerOutputs {
+  const validHerbIds = new Set([
+    "H01",
+    "H02",
+    "H03",
+    "H04",
+    "H05",
+    "H06",
+    "H07",
+    "H08",
+    "H09",
+    "H10",
+    "H11",
+    "H12",
+  ]);
+  const validPotionIds = new Set([
+    "P01",
+    "P02",
+    "P03",
+    "P04",
+    "P05",
+    "P06",
+    "P07",
+    "P08",
+    "P09",
+    "P10",
+    "P11",
+    "P12",
+    "P13",
+    "P14",
+    "P15",
+    "P16",
+    "P17",
+    "P18",
+  ]);
+
+  const buyHerbs = (response.buyHerbs || [])
+    .filter((h) => validHerbIds.has(h.herbId) && h.qty > 0)
+    .map((h) => ({
+      herbId: h.herbId as HerbId,
+      qty: Math.max(0, Math.floor(h.qty)),
+    }));
+
+  const makePotions = (response.makePotions || [])
+    .filter((p) => validPotionIds.has(p.potionId) && p.qty > 0)
+    .map((p) => ({
+      potionId: p.potionId as PotionId,
+      qty: Math.max(0, Math.floor(p.qty)),
+    }));
+
+  const potionOffers = (response.potionOffers || [])
+    .filter((p) => validPotionIds.has(p.potionId) && p.qty > 0 && p.price > 0)
+    .map((p) => ({
+      potionId: p.potionId as PotionId,
+      price: Math.max(1, Math.floor(p.price)),
+      qty: Math.max(0, Math.floor(p.qty)),
+    }));
+
+  return { buyHerbs, makePotions, potionOffers };
 }

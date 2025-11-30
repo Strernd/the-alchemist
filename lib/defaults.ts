@@ -2,12 +2,13 @@ import { GameConfig, Player } from "./types";
 
 export function getWithDefaultConfig(
   seed: string,
-  players: Player[]
+  players: Player[],
+  days: number = 5
 ): GameConfig {
   return {
     generation: {
       seed,
-      days: 5,
+      days,
       herbTierBasePrices: { T1: 10, T2: 50, T3: 150 },
       herbTierBasePriceSpread: { T1: 0.5, T2: 0.5, T3: 0.5 },
       herbDailyPriceSpread: 0.15,

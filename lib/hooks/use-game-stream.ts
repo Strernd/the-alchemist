@@ -111,13 +111,18 @@ export function useGameStream() {
     fetchRuns();
   }, [state.phase]); // Refetch when phase changes (e.g., after completing a game)
 
-  const startGame = useCallback(async (players: Player[], seed?: string) => {
+  const startGame = useCallback(async (
+    players: Player[],
+    options?: { seed?: string; days?: number }
+  ) => {
+    const days = options?.days || 5;
     setState((prev) => ({
       ...prev,
       phase: "running",
       players,
       gameStates: [],
       error: null,
+      totalDaysConfig: days,
     }));
 
     try {
@@ -125,7 +130,7 @@ export function useGameStream() {
       const response = await fetch("/api/game/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ players, seed }),
+        body: JSON.stringify({ players, seed: options?.seed, days }),
       });
 
       if (!response.ok) {
@@ -135,15 +140,15 @@ export function useGameStream() {
       const { runId, seed: gameSeed } = await response.json();
       setState((prev) => ({ ...prev, runId, seed: gameSeed }));
 
-      // Save the run to localStorage
+      // Save placeholder run - names will be updated when AI chooses them
       saveRun({
         runId,
         seed: gameSeed,
-        playerNames: players.map((p) => p.name),
+        playerNames: players.map((_, i) => `Alchemist ${i + 1}`),
         createdAt: new Date().toISOString(),
       });
 
-      // Connect to the stream
+      // Connect to the stream (will update names when first state arrives)
       await streamGameData(runId, players);
     } catch (error) {
       setState((prev) => ({
@@ -196,7 +201,7 @@ export function useGameStream() {
     }
   }, []);
 
-  const streamGameData = async (runId: string, _players: Player[]) => {
+  const streamGameData = async (runId: string, initialPlayers: Player[]) => {
     console.log("[Game] Connecting to stream for run:", runId);
     
     const streamResponse = await fetch(`/api/game/stream/${runId}`);
@@ -210,6 +215,7 @@ export function useGameStream() {
     const decoder = new TextDecoder();
     let buffer = "";
     let statesReceived = 0;
+    let namesUpdated = false;
 
     try {
       while (true) {
@@ -234,6 +240,34 @@ export function useGameStream() {
             const gameState = JSON.parse(trimmed) as GameState;
             statesReceived++;
             console.log("[Game] Received state #", statesReceived, "currentDay:", gameState.currentDay);
+
+            // Update player names from AI-chosen names (first state only)
+            if (!namesUpdated && gameState.playerNames && gameState.playerNames.length > 0) {
+              const updatedPlayers = initialPlayers.map((p, idx) => ({
+                ...p,
+                name: gameState.playerNames?.[idx] || p.name,
+              }));
+              namesUpdated = true;
+              
+              // Update localStorage with AI-chosen names
+              setState((prev) => {
+                if (prev.runId && prev.seed) {
+                  saveRun({
+                    runId: prev.runId,
+                    seed: prev.seed,
+                    playerNames: updatedPlayers.map((p) => p.name),
+                    createdAt: new Date().toISOString(),
+                  });
+                }
+                return {
+                  ...prev,
+                  players: updatedPlayers,
+                  gameStates: [...prev.gameStates, gameState],
+                };
+              });
+              continue;
+            }
+
             setState((prev) => ({
               ...prev,
               gameStates: [...prev.gameStates, gameState],

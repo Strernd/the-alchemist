@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { RunInfo } from "@/lib/hooks/use-game-stream";
 import { AI_MODELS, AIModel } from "@/lib/models";
 import { Player } from "@/lib/types";
-import { RunInfo } from "@/lib/hooks/use-game-stream";
+import { useState } from "react";
 
 interface PlayerSetupProps {
-  onStartGame: (players: Player[], seed?: string) => void;
+  onStartGame: (
+    players: Player[],
+    options?: { seed?: string; days?: number }
+  ) => void;
   onLoadRun: (run: RunInfo) => void;
   onDeleteRun: (runId: string) => void;
   pastRuns: RunInfo[];
@@ -18,8 +21,7 @@ type PlayerSlot = {
   modelId: string;
 };
 
-const PLAYER_SPRITES = ["🧙", "🧝", "🧛", "🧜", "🧚", "🦹"];
-const PLAYER_TITLES = ["MAGE", "ELF", "VAMPIRE", "MERFOLK", "FAIRY", "HERO"];
+const PLAYER_SPRITES = ["⚗️", "🧪", "🔮", "⚡", "🌿", "💎"];
 
 export default function PlayerSetup({
   onStartGame,
@@ -33,10 +35,11 @@ export default function PlayerSetup({
     { enabled: true, modelId: AI_MODELS[3].id },
     { enabled: false, modelId: AI_MODELS[5].id },
     { enabled: false, modelId: AI_MODELS[7].id },
-    { enabled: false, modelId: AI_MODELS[9].id },
-    { enabled: false, modelId: AI_MODELS[10].id },
+    { enabled: false, modelId: AI_MODELS[1].id },
+    { enabled: false, modelId: AI_MODELS[2].id },
   ]);
   const [seed, setSeed] = useState("");
+  const [days, setDays] = useState(5);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [activeTab, setActiveTab] = useState<"new" | "history">("new");
 
@@ -65,7 +68,7 @@ export default function PlayerSetup({
           model: slot.modelId,
         };
       });
-    onStartGame(players, seed || undefined);
+    onStartGame(players, { seed: seed || undefined, days });
   };
 
   const getModelsByProvider = () => {
@@ -156,13 +159,17 @@ export default function PlayerSetup({
       <div className="flex gap-2 mb-6">
         <button
           onClick={() => setActiveTab("new")}
-          className={`pixel-btn ${activeTab === "new" ? "pixel-btn-primary" : ""}`}
+          className={`pixel-btn ${
+            activeTab === "new" ? "pixel-btn-primary" : ""
+          }`}
         >
           ⚔ NEW GAME
         </button>
         <button
           onClick={() => setActiveTab("history")}
-          className={`pixel-btn ${activeTab === "history" ? "pixel-btn-primary" : ""}`}
+          className={`pixel-btn ${
+            activeTab === "history" ? "pixel-btn-primary" : ""
+          }`}
         >
           📜 HISTORY {pastRuns.length > 0 && `(${pastRuns.length})`}
         </button>
@@ -198,21 +205,31 @@ export default function PlayerSetup({
                 onClick={() => !slot.enabled && togglePlayer(index)}
                 className={`
                   pixel-frame p-4 lg:p-6 transition-opacity cursor-pointer
-                  ${slot.enabled ? "opacity-100" : "opacity-40 hover:opacity-60"}
+                  ${
+                    slot.enabled ? "opacity-100" : "opacity-40 hover:opacity-60"
+                  }
                   ${slot.enabled ? `player-bg-${index}` : ""}
                 `}
                 style={{
-                  borderColor: slot.enabled ? `var(--player-${index + 1})` : undefined,
+                  borderColor: slot.enabled
+                    ? `var(--player-${index + 1})`
+                    : undefined,
                 }}
               >
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <span className="text-3xl">{PLAYER_SPRITES[index]}</span>
                     <div>
-                      <span className={`pixel-heading ${slot.enabled ? `player-color-${index}` : ""}`}>
-                        {PLAYER_TITLES[index]}
+                      <span
+                        className={`pixel-heading ${
+                          slot.enabled ? `player-color-${index}` : ""
+                        }`}
+                      >
+                        ALCHEMIST {index + 1}
                       </span>
-                      <p className="pixel-text-sm text-[var(--pixel-text-dim)]">SLOT {index + 1}</p>
+                      <p className="pixel-text-sm text-[var(--pixel-text-dim)]">
+                        SLOT {index + 1}
+                      </p>
                     </div>
                   </div>
                   <button
@@ -243,15 +260,20 @@ export default function PlayerSetup({
                       onClick={(e) => e.stopPropagation()}
                       className="pixel-select w-full mb-3"
                     >
-                      {Object.entries(modelsByProvider).map(([provider, models]) => (
-                        <optgroup key={provider} label={`═══ ${provider} ═══`}>
-                          {models.map((model) => (
-                            <option key={model.id} value={model.id}>
-                              {model.name}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
+                      {Object.entries(modelsByProvider).map(
+                        ([provider, models]) => (
+                          <optgroup
+                            key={provider}
+                            label={`═══ ${provider} ═══`}
+                          >
+                            {models.map((model) => (
+                              <option key={model.id} value={model.id}>
+                                {model.name}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )
+                      )}
                     </select>
 
                     <div className="flex items-center justify-between">
@@ -260,7 +282,8 @@ export default function PlayerSetup({
                       </span>
                       <span
                         className={`pixel-text-sm px-2 py-1 border-2 uppercase ${getTierStyle(
-                          AI_MODELS.find((m) => m.id === slot.modelId)?.tier || ""
+                          AI_MODELS.find((m) => m.id === slot.modelId)?.tier ||
+                            ""
                         )}`}
                       >
                         {AI_MODELS.find((m) => m.id === slot.modelId)?.tier}
@@ -271,7 +294,9 @@ export default function PlayerSetup({
 
                 {!slot.enabled && (
                   <div className="text-center py-4">
-                    <p className="pixel-text-sm text-[var(--pixel-text-dim)]">CLICK TO JOIN</p>
+                    <p className="pixel-text-sm text-[var(--pixel-text-dim)]">
+                      CLICK TO JOIN
+                    </p>
                   </div>
                 )}
               </div>
@@ -289,18 +314,44 @@ export default function PlayerSetup({
             </button>
 
             {showAdvanced && (
-              <div className="mt-4 pixel-frame p-4">
-                <label className="block pixel-text-sm text-[var(--pixel-gold)] mb-2">GAME SEED</label>
-                <input
-                  type="text"
-                  value={seed}
-                  onChange={(e) => setSeed(e.target.value)}
-                  placeholder="Leave empty for random..."
-                  className="pixel-input w-full"
-                />
-                <p className="pixel-text-sm text-[var(--pixel-text-dim)] mt-2">
-                  Same seed = same market conditions
-                </p>
+              <div className="mt-4 pixel-frame p-4 space-y-4">
+                {/* Days */}
+                <div>
+                  <label className="block pixel-text-sm text-[var(--pixel-gold)] mb-2">
+                    GAME DAYS
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min={1}
+                      max={20}
+                      value={days}
+                      onChange={(e) => setDays(parseInt(e.target.value))}
+                      className="flex-1"
+                    />
+                    <span className="pixel-text w-8 text-center">{days}</span>
+                  </div>
+                  <p className="pixel-text-sm text-[var(--pixel-text-dim)] mt-1">
+                    1-20 days of trading
+                  </p>
+                </div>
+
+                {/* Seed */}
+                <div>
+                  <label className="block pixel-text-sm text-[var(--pixel-gold)] mb-2">
+                    GAME SEED
+                  </label>
+                  <input
+                    type="text"
+                    value={seed}
+                    onChange={(e) => setSeed(e.target.value)}
+                    placeholder="Leave empty for random..."
+                    className="pixel-input w-full"
+                  />
+                  <p className="pixel-text-sm text-[var(--pixel-text-dim)] mt-1">
+                    Same seed = same market conditions
+                  </p>
+                </div>
               </div>
             )}
           </div>
@@ -317,14 +368,16 @@ export default function PlayerSetup({
           <p className="pixel-text-sm text-[var(--pixel-text-dim)] mt-4 text-center">
             {enabledCount} ALCHEMIST{enabledCount !== 1 ? "S" : ""} WILL COMPETE
             <br />
-            OVER 5 DAYS OF TRADING
+            OVER {days} DAY{days !== 1 ? "S" : ""} OF TRADING
           </p>
         </>
       ) : (
         /* History Tab */
         <div className="w-full max-w-3xl">
           <div className="pixel-frame p-4">
-            <h2 className="pixel-heading text-center mb-4">📜 PAST TOURNAMENTS</h2>
+            <h2 className="pixel-heading text-center mb-4">
+              📜 PAST TOURNAMENTS
+            </h2>
 
             {loadingRuns ? (
               <div className="text-center py-8">
@@ -335,7 +388,9 @@ export default function PlayerSetup({
             ) : pastRuns.length === 0 ? (
               <div className="text-center py-8">
                 <div className="text-4xl mb-4">📭</div>
-                <p className="pixel-text text-[var(--pixel-text-dim)]">No past games found</p>
+                <p className="pixel-text text-[var(--pixel-text-dim)]">
+                  No past games found
+                </p>
                 <p className="pixel-text-sm text-[var(--pixel-text-dim)] mt-2">
                   Start a new tournament to see it here!
                 </p>
@@ -351,22 +406,34 @@ export default function PlayerSetup({
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-2">
-                          <span className={`pixel-text-sm ${getStatusColor(run.status)}`}>
+                          <span
+                            className={`pixel-text-sm ${getStatusColor(
+                              run.status
+                            )}`}
+                          >
                             {getStatusIcon(run.status)}
                           </span>
                           <span className="pixel-heading truncate">
                             {run.playerNames.slice(0, 3).join(" vs ")}
-                            {run.playerNames.length > 3 && ` +${run.playerNames.length - 3}`}
+                            {run.playerNames.length > 3 &&
+                              ` +${run.playerNames.length - 3}`}
                           </span>
                         </div>
                         <div className="flex flex-wrap gap-x-4 gap-y-1">
                           <span className="pixel-text-sm text-[var(--pixel-text-dim)]">
-                            SEED: <span className="text-[var(--pixel-gold)]">{run.seed}</span>
+                            SEED:{" "}
+                            <span className="text-[var(--pixel-gold)]">
+                              {run.seed}
+                            </span>
                           </span>
                           <span className="pixel-text-sm text-[var(--pixel-text-dim)]">
                             {formatDate(run.createdAt)}
                           </span>
-                          <span className={`pixel-text-sm uppercase ${getStatusColor(run.status)}`}>
+                          <span
+                            className={`pixel-text-sm uppercase ${getStatusColor(
+                              run.status
+                            )}`}
+                          >
                             {run.status}
                           </span>
                         </div>
@@ -399,7 +466,10 @@ export default function PlayerSetup({
           </div>
 
           <div className="text-center mt-6">
-            <button onClick={() => setActiveTab("new")} className="pixel-btn pixel-btn-primary">
+            <button
+              onClick={() => setActiveTab("new")}
+              className="pixel-btn pixel-btn-primary"
+            >
               ⚔ START NEW GAME
             </button>
           </div>

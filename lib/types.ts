@@ -78,8 +78,12 @@ export type GameState = {
   lastDayErrorsByPlayer: string[][];
   unprocessedOffersByDay: PotionOffer[][];
   processedMarketByDay: ProcessedMarket[];
-  // New: detailed day-by-day records
+  // Detailed day-by-day records
   dayRecords: DayRecord[];
+  // AI-chosen player names (set at game start)
+  playerNames?: string[];
+  // Players that have been disqualified due to errors (by index)
+  disqualifiedPlayers?: { playerIdx: number; reason: string }[];
 };
 
 export type ProcessedMarket = {
@@ -113,20 +117,20 @@ export const playerOutputsSchema = z.object({
   buyHerbs: z.array(
     z.object({
       herbId: z.string().regex(/^H(0[1-9]|1[0-2])$/),
-      qty: z.number().int().positive().min(0),
+      qty: z.number().int().nonnegative(),
     })
   ),
   makePotions: z.array(
     z.object({
       potionId: z.string().regex(/^P(0[1-9]|1[0-8])$/),
-      qty: z.number().int().positive().min(0),
+      qty: z.number().int().nonnegative(),
     })
   ),
   potionOffers: z.array(
     z.object({
       potionId: z.string().regex(/^P(0[1-9]|1[0-8])$/),
       price: z.number().int().positive(),
-      qty: z.number().int().positive().min(0),
+      qty: z.number().int().nonnegative(),
     })
   ),
 });

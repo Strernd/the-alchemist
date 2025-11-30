@@ -297,6 +297,42 @@ export function sanitizePlayerOutputsDetailed(
   };
 }
 
+/**
+ * Splits demand evenly among offers, respecting each offer's max qty.
+ * Remainder distributed by player index order.
+ * Returns array of [offer, soldQty] pairs.
+ */
+function allocateEvenSplit(
+  offers: PotionOffer[],
+  demand: number
+): { offer: PotionOffer; sold: number }[] {
+  // Sort by player index for deterministic remainder distribution
+  const sorted = [...offers].sort(
+    (a, b) => (a.playerIdx ?? 0) - (b.playerIdx ?? 0)
+  );
+  const result = sorted.map((offer) => ({ offer, sold: 0 }));
+  let left = demand;
+
+  while (left > 0) {
+    const active = result.filter((r) => r.sold < r.offer.qty);
+    if (active.length === 0) break;
+
+    const share = Math.floor(left / active.length);
+    let given = 0;
+
+    for (const r of active) {
+      const take = Math.min(share || 1, r.offer.qty - r.sold, left - given);
+      r.sold += take;
+      given += take;
+    }
+
+    left -= given;
+    if (given === 0) break;
+  }
+
+  return result;
+}
+
 function processMarket(
   market: Record<PotionId, PotionOffer[]>,
   demands: Record<PotionId, number>
@@ -311,22 +347,53 @@ function processMarket(
     }
   >;
   const processedOffers = [] as PotionOffer[];
+
   Object.entries(demands).forEach(([potionId, demand]) => {
     const offers = market[potionId as PotionId] || [];
-    const processedOffersForPotion = [] as PotionOffer[];
-    let fulfilled = 0;
+    const processedOffersForPotion: PotionOffer[] = [];
     let remaining = demand;
     let highestPrice = 0;
     const lowestPrice = offers.length > 0 ? offers[0].price : 0;
-    for (const offer of offers) {
-      const actualSold = Math.min(remaining, offer.qty);
-      fulfilled += actualSold;
-      remaining -= actualSold;
-      processedOffersForPotion.push({ ...offer, actuallySold: actualSold });
-      if (actualSold > 0) {
-        highestPrice = offer.price;
+
+    // Group offers by price for fair allocation
+    let i = 0;
+    while (i < offers.length && remaining > 0) {
+      const currentPrice = offers[i].price;
+
+      // Collect all offers at this price level
+      const samePriceOffers: PotionOffer[] = [];
+      while (i < offers.length && offers[i].price === currentPrice) {
+        samePriceOffers.push(offers[i]);
+        i++;
+      }
+
+      const totalQtyAtPrice = samePriceOffers.reduce((s, o) => s + o.qty, 0);
+
+      if (totalQtyAtPrice <= remaining) {
+        // All offers fully satisfied
+        for (const offer of samePriceOffers) {
+          processedOffersForPotion.push({ ...offer, actuallySold: offer.qty });
+          if (offer.qty > 0) highestPrice = currentPrice;
+        }
+        remaining -= totalQtyAtPrice;
+      } else {
+        // Split demand evenly among same-price offers
+        const allocated = allocateEvenSplit(samePriceOffers, remaining);
+        for (const { offer, sold } of allocated) {
+          processedOffersForPotion.push({ ...offer, actuallySold: sold });
+          if (sold > 0) highestPrice = offer.price;
+        }
+        remaining = 0;
       }
     }
+
+    // Remaining offers get 0 sales
+    while (i < offers.length) {
+      processedOffersForPotion.push({ ...offers[i], actuallySold: 0 });
+      i++;
+    }
+
+    const fulfilled = demand - remaining;
     processedOffers.push(...processedOffersForPotion);
     potionInformation[potionId as PotionId] = {
       fulfilled,
@@ -335,6 +402,7 @@ function processMarket(
       lowestPrice,
     };
   });
+
   return { processedOffers, potionInformation };
 }
 
@@ -348,7 +416,7 @@ export function buildMarket(executedOffers: PotionOffer[][]) {
       market[offer.potionId].push({ ...offer, playerIdx: idx });
     });
   });
-  // prices ascending
+  // Sort by price ascending (order within same price doesn't matter - processMarket splits evenly)
   const sortedMarket = mapValues(market, (offers) =>
     offers.sort((a, b) => a.price - b.price)
   );
