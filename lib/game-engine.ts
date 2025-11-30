@@ -471,6 +471,12 @@ function createHerbDailyPrices(config: GenerationConfig, rng: Random) {
 
 function createPotionBaseDemands(config: GenerationConfig, rng: Random) {
   const demands = {} as Record<PotionId, number>;
+  // Scale demand by player count: 0.5 * playerCount
+  // For 2 players: multiplier = 1.0 (same as base values)
+  // For 4 players: multiplier = 2.0 (double demand)
+  // For 6 players: multiplier = 3.0 (triple demand)
+  const playerScaling = 0.5 * config.playerCount;
+
   for (const [tier, potions] of Object.entries(POTION_TIERS)) {
     const tierBaseDemand = config.potionTierBaseDemands[tier as Tier];
     const tierBaseDemandSpread =
@@ -478,6 +484,7 @@ function createPotionBaseDemands(config: GenerationConfig, rng: Random) {
     for (const potion of potions) {
       const potionDemand =
         tierBaseDemand *
+        playerScaling *
         (1 + rng.float(-tierBaseDemandSpread, tierBaseDemandSpread));
       demands[potion as PotionId] = potionDemand;
     }

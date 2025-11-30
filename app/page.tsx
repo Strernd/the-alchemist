@@ -16,10 +16,12 @@ export default function Home() {
     totalDays,
     pastRuns,
     loadingRuns,
+    waitingForHuman,
     startGame,
     loadExistingRun,
     deleteRun,
     reset,
+    submitHumanTurn,
   } = useGameStream();
 
   const handleStartGame = (
@@ -66,7 +68,9 @@ export default function Home() {
       seed={seed}
       daysCompleted={daysCompleted}
       totalDays={totalDays}
+      waitingForHuman={waitingForHuman}
       onReset={reset}
+      onSubmitHumanTurn={submitHumanTurn}
     />
   );
 }

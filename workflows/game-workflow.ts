@@ -12,7 +12,7 @@ import {
   PlayerOutputs,
   PlayerUsageStats,
 } from "@/lib/types";
-import { getWritable } from "workflow";
+import { createHook, getWritable } from "workflow";
 import { aiPlayerStep } from "./ai-player-step";
 import { chooseAlchemistName, UsageData } from "./name-step";
 
@@ -72,26 +72,49 @@ export async function gameWorkflow(config: GameConfig) {
     })
   );
 
-  // Step 1: Each AI chooses their alchemist name
+  // Step 1: Each AI chooses their alchemist name (human players keep their name)
   console.log(
     `[Game] Choosing names for ${config.runtime.players.length} players...`
   );
 
+  // Track disqualified players
+  const disqualified: { playerIdx: number; reason: string }[] = [];
+
+  // Only request names from AI players
   const nameResults = await Promise.all(
-    config.runtime.players.map((player) => chooseAlchemistName(player.model))
+    config.runtime.players.map(async (player) => {
+      if (player.isHuman) {
+        // Human player keeps their configured name (or default)
+        return {
+          name: player.name || "You",
+          success: true,
+          usage: {
+            inputTokens: 0,
+            outputTokens: 0,
+            totalTokens: 0,
+            durationMs: 0,
+          },
+        };
+      }
+      return chooseAlchemistName(player.model);
+    })
   );
 
-  // Track disqualified players and accumulate usage from name generation
-  const disqualified: { playerIdx: number; reason: string }[] = [];
   const namedPlayers: Player[] = config.runtime.players.map((player, idx) => {
     const result = nameResults[idx];
 
-    // Accumulate usage
-    const cost = calculateCost(player.model, result.usage);
-    playerUsageStats[idx] = addUsage(playerUsageStats[idx], result.usage, cost);
+    // Only accumulate usage for AI players
+    if (!player.isHuman) {
+      const cost = calculateCost(player.model, result.usage);
+      playerUsageStats[idx] = addUsage(
+        playerUsageStats[idx],
+        result.usage,
+        cost
+      );
 
-    if (!result.success && result.error) {
-      disqualified.push({ playerIdx: idx, reason: result.error });
+      if (!result.success && result.error) {
+        disqualified.push({ playerIdx: idx, reason: result.error });
+      }
     }
     return { ...player, name: result.name };
   });
@@ -118,25 +141,81 @@ export async function gameWorkflow(config: GameConfig) {
   };
   await streamContentToClient(writable, gameState);
 
+  // Use seed for hook tokens (must be deterministic for workflow replay)
+  const hookPrefix = `alchemist_${config.generation.seed}`;
+
   for (let day = 1; day <= updatedConfig.generation.days; day++) {
     console.log(`Starting day ${day} of ${updatedConfig.generation.days}`);
     const disqualifiedIdxs = new Set(disqualified.map((d) => d.playerIdx));
 
-    const results = await Promise.all(
-      updatedConfig.runtime.players.map(async (player, idx) => {
-        const isDisqualified = disqualifiedIdxs.has(idx);
-        const playerInput = getPlayerInputs(
-          game,
-          updatedConfig,
-          day,
-          gameState,
-          idx
+    // Collect all player outputs for this day
+    const playerOutputs: PlayerOutputs[] = [];
+
+    for (let idx = 0; idx < updatedConfig.runtime.players.length; idx++) {
+      const player = updatedConfig.runtime.players[idx];
+      const isDisqualified = disqualifiedIdxs.has(idx);
+      const playerInput = getPlayerInputs(
+        game,
+        updatedConfig,
+        day,
+        gameState,
+        idx
+      );
+
+      let outputs: PlayerOutputs;
+
+      if (player.isHuman && !isDisqualified) {
+        // Human player: use a hook to wait for input
+        const hookToken = `${hookPrefix}:day${day}:player${idx}`;
+        console.log(`[Game] Creating hook for human player ${idx}`);
+        console.log(`[Game] Hook token: ${hookToken}`);
+
+        // Track start time for human player
+        const startTime = await getTimestamp();
+
+        // Create hook FIRST before streaming (so it exists when client tries to resume)
+        const hook = createHook<PlayerOutputs>({ token: hookToken });
+
+        // Stream state with waiting info so UI can show input form
+        const waitingState: GameState = {
+          ...gameState,
+          currentDay: day,
+          disqualifiedPlayers: disqualified,
+          playerUsageStats: [...playerUsageStats],
+          waitingForHuman: {
+            playerIdx: idx,
+            hookToken,
+            playerInputs: playerInput,
+            herbPrices: game.herbDailyPrices[day - 1],
+          },
+        };
+        console.log(`[Game] Streaming waiting state to client...`);
+        await streamContentToClient(writable, waitingState);
+
+        console.log(`[Game] Waiting for human player ${idx} input...`);
+        outputs = await hook;
+
+        // Track end time and calculate duration
+        const endTime = await getTimestamp();
+        const durationMs = endTime - startTime;
+        console.log(
+          `[Game] Human player ${idx} took ${(durationMs / 1000).toFixed(1)}s`
         );
-        const result = await aiPlayerStep(
-          playerInput,
-          player.model,
-          isDisqualified
+
+        // Add usage stats for human player (no tokens, just time)
+        playerUsageStats[idx] = addUsage(
+          playerUsageStats[idx],
+          { inputTokens: 0, outputTokens: 0, totalTokens: 0, durationMs },
+          0 // No cost for human
         );
+
+        console.log(`[Game] Received human player ${idx} input`);
+      } else if (isDisqualified) {
+        // Disqualified player: empty outputs
+        outputs = { buyHerbs: [], makePotions: [], potionOffers: [] };
+      } else {
+        // AI player: use aiPlayerStep
+        const result = await aiPlayerStep(playerInput, player.model, false);
 
         // Accumulate usage (even for failed calls)
         if (result.usage) {
@@ -159,29 +238,30 @@ export async function gameWorkflow(config: GameConfig) {
 
         // If this step failed, disqualify the player for future rounds
         if (!result.success) {
-          if (result.error && !isDisqualified) {
+          if (result.error) {
             console.log(
               `[Game] ⚠ DISQUALIFYING player ${idx}: ${result.error}`
             );
             disqualified.push({ playerIdx: idx, reason: result.error });
-          } else if (!result.error) {
+          } else {
             console.log(`[Game] ⚠ Player ${idx} failed but no error message!`);
-          } else if (isDisqualified) {
-            console.log(`[Game] Player ${idx} already disqualified, skipping`);
           }
         }
 
-        return result.outputs;
-      })
-    );
+        outputs = result.outputs;
+      }
 
-    gameState = processGameDay(results as PlayerOutputs[], gameState, game);
+      playerOutputs.push(outputs);
+    }
 
-    // Update game state with latest disqualification and usage stats
+    gameState = processGameDay(playerOutputs, gameState, game);
+
+    // Update game state with latest disqualification and usage stats (clear waiting state)
     gameState = {
       ...gameState,
       disqualifiedPlayers: disqualified,
       playerUsageStats: [...playerUsageStats],
+      waitingForHuman: undefined,
     };
     await streamContentToClient(writable, gameState);
   }
@@ -222,4 +302,10 @@ async function streamContentToClient(
   const writer = writable.getWriter();
   await writer.write(JSON.stringify(gameState) + "\n");
   writer.releaseLock();
+}
+
+// Get current timestamp (must be in a step for determinism in workflows)
+async function getTimestamp(): Promise<number> {
+  "use step";
+  return Date.now();
 }

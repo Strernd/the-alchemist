@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { GameState, Player } from "@/lib/types";
+import { GameState, Player, PlayerOutputs } from "@/lib/types";
 
 export type GamePhase = "setup" | "running" | "completed" | "error";
 
@@ -315,9 +315,37 @@ export function useGameStream() {
     });
   }, []);
 
+  // Submit human player turn via the hook API
+  const submitHumanTurn = useCallback(async (hookToken: string, outputs: PlayerOutputs) => {
+    console.log("[Game] Submitting human turn for token:", hookToken);
+    try {
+      const response = await fetch("/api/game/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hookToken, outputs }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error("[Game] Human turn submission failed:", error);
+        throw new Error(error.error || "Failed to submit turn");
+      }
+
+      console.log("[Game] Human turn submitted successfully");
+      return true;
+    } catch (error) {
+      console.error("[Game] Error submitting human turn:", error);
+      throw error;
+    }
+  }, []);
+
   // Game states: [initial, afterDay1, afterDay2, afterDay3, afterDay4, afterDay5]
   // We want to show days 1-5, so we skip the initial state
   const processedDays = state.gameStates.slice(1);
+
+  // Get waiting for human state from the latest game state
+  const latestState = state.gameStates[state.gameStates.length - 1];
+  const waitingForHuman = latestState?.waitingForHuman;
 
   return {
     ...state,
@@ -325,11 +353,13 @@ export function useGameStream() {
     loadExistingRun,
     deleteRun,
     reset,
+    submitHumanTurn,
     pastRuns,
     loadingRuns,
     dayStates: processedDays,
     currentDayState: processedDays[processedDays.length - 1] ?? null,
     daysCompleted: processedDays.length,
     totalDays: state.totalDaysConfig,
+    waitingForHuman,
   };
 }

@@ -3,6 +3,7 @@ import { z } from "zod";
 export type GenerationConfig = {
   seed: string;
   days: number;
+  playerCount: number; // Used to scale demand
   herbTierBasePrices: Record<Tier, number>;
   herbTierBasePriceSpread: Record<Tier, number>;
   herbDailyPriceSpread: number;
@@ -30,6 +31,7 @@ export type PlayerInventory = {
 export type Player = {
   name: string;
   model: string;
+  isHuman?: boolean; // If true, this player is controlled by a human via UI
 };
 
 export type Game = {
@@ -96,6 +98,13 @@ export type GameState = {
   disqualifiedPlayers?: { playerIdx: number; reason: string }[];
   // Token usage and cost tracking per player (by index)
   playerUsageStats?: PlayerUsageStats[];
+  // Human player support
+  waitingForHuman?: {
+    playerIdx: number;
+    hookToken: string;
+    playerInputs: PlayerInputs; // The inputs the human needs to make decisions
+    herbPrices: Record<HerbId, number>; // Current day herb prices
+  };
 };
 
 export type ProcessedMarket = {

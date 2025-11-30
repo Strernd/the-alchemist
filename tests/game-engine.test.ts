@@ -19,6 +19,7 @@ const baseConfig: GameConfig = {
   generation: {
     seed: "test-seed",
     days: 3,
+    playerCount: 2, // Scales demand (0.5 * playerCount = 1.0 for 2 players)
     herbTierBasePrices: { T1: 10, T2: 20, T3: 30 },
     herbTierBasePriceSpread: { T1: 0.1, T2: 0.1, T3: 0.1 },
     herbDailyPriceSpread: 0.05,

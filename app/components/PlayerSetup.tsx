@@ -4,6 +4,7 @@ import { RunInfo } from "@/lib/hooks/use-game-stream";
 import { AI_MODELS, AIModel } from "@/lib/models";
 import { Player } from "@/lib/types";
 import { useState } from "react";
+import GameRulesModal from "./GameRulesModal";
 
 interface PlayerSetupProps {
   onStartGame: (
@@ -19,6 +20,8 @@ interface PlayerSetupProps {
 type PlayerSlot = {
   enabled: boolean;
   modelId: string;
+  isHuman: boolean;
+  humanName: string;
 };
 
 const PLAYER_SPRITES = ["⚗️", "🧪", "🔮", "⚡", "🌿", "💎"];
@@ -31,17 +34,18 @@ export default function PlayerSetup({
   loadingRuns,
 }: PlayerSetupProps) {
   const [playerSlots, setPlayerSlots] = useState<PlayerSlot[]>([
-    { enabled: true, modelId: AI_MODELS[0].id },
-    { enabled: true, modelId: AI_MODELS[3].id },
-    { enabled: false, modelId: AI_MODELS[5].id },
-    { enabled: false, modelId: AI_MODELS[7].id },
-    { enabled: false, modelId: AI_MODELS[1].id },
-    { enabled: false, modelId: AI_MODELS[2].id },
+    { enabled: true, modelId: "human", isHuman: true, humanName: "" }, // Default: Player 1 is human
+    { enabled: true, modelId: AI_MODELS[0].id, isHuman: false, humanName: "" },
+    { enabled: false, modelId: AI_MODELS[3].id, isHuman: false, humanName: "" },
+    { enabled: false, modelId: AI_MODELS[5].id, isHuman: false, humanName: "" },
+    { enabled: false, modelId: AI_MODELS[1].id, isHuman: false, humanName: "" },
+    { enabled: false, modelId: AI_MODELS[2].id, isHuman: false, humanName: "" },
   ]);
   const [seed, setSeed] = useState("");
   const [days, setDays] = useState(5);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [activeTab, setActiveTab] = useState<"new" | "history">("new");
+  const [showRules, setShowRules] = useState(false);
 
   const enabledCount = playerSlots.filter((p) => p.enabled).length;
 
@@ -55,6 +59,7 @@ export default function PlayerSetup({
   const setPlayerModel = (index: number, modelId: string) => {
     const newSlots = [...playerSlots];
     newSlots[index].modelId = modelId;
+    newSlots[index].isHuman = modelId === "human";
     setPlayerSlots(newSlots);
   };
 
@@ -62,14 +67,31 @@ export default function PlayerSetup({
     const players: Player[] = playerSlots
       .filter((slot) => slot.enabled)
       .map((slot) => {
+        if (slot.isHuman) {
+          return {
+            name: slot.humanName.trim() || "You",
+            model: "human",
+            isHuman: true,
+          };
+        }
         const model = AI_MODELS.find((m) => m.id === slot.modelId)!;
         return {
           name: model.name,
           model: slot.modelId,
+          isHuman: false,
         };
       });
     onStartGame(players, { seed: seed || undefined, days });
   };
+
+  const setHumanName = (index: number, name: string) => {
+    const newSlots = [...playerSlots];
+    newSlots[index].humanName = name;
+    setPlayerSlots(newSlots);
+  };
+
+  // Count human players
+  const humanCount = playerSlots.filter((p) => p.enabled && p.isHuman).length;
 
   const getModelsByProvider = () => {
     const providers: Record<string, AIModel[]> = {};
@@ -150,6 +172,9 @@ export default function PlayerSetup({
         <p className="pixel-text text-[var(--pixel-text-dim)] max-w-md mx-auto">
           AI Potion Trading Tournament
         </p>
+        <button onClick={() => setShowRules(true)} className="pixel-btn mt-4">
+          📜 HOW TO PLAY
+        </button>
       </div>
 
       {/* Tab Navigation */}
@@ -257,6 +282,9 @@ export default function PlayerSetup({
                       onClick={(e) => e.stopPropagation()}
                       className="pixel-select w-full mb-3"
                     >
+                      <optgroup label="═══ YOU ═══">
+                        <option value="human">🎮 HUMAN PLAYER</option>
+                      </optgroup>
                       {Object.entries(modelsByProvider).map(
                         ([provider, models]) => (
                           <optgroup
@@ -274,26 +302,51 @@ export default function PlayerSetup({
                       )}
                     </select>
 
-                    <div className="flex items-center justify-between">
-                      <span className="pixel-text-sm text-[var(--pixel-text-dim)]">
-                        {AI_MODELS.find((m) => m.id === slot.modelId)?.provider}
-                      </span>
-                      <span
-                        className={`pixel-text-sm ${getPricingStyle(
-                          AI_MODELS.find((m) => m.id === slot.modelId)?.tier ||
-                            1
-                        )}`}
-                        title={`Tier ${
-                          AI_MODELS.find((m) => m.id === slot.modelId)?.tier ||
-                          1
-                        }/5`}
-                      >
-                        {getPricingDisplay(
-                          AI_MODELS.find((m) => m.id === slot.modelId)?.tier ||
-                            1
-                        )}
-                      </span>
-                    </div>
+                    {slot.isHuman ? (
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={slot.humanName}
+                          onChange={(e) => setHumanName(index, e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          placeholder="Enter your name..."
+                          className="pixel-input w-full"
+                          maxLength={25}
+                        />
+                        <div className="flex items-center justify-between">
+                          <span className="pixel-text-sm text-[var(--pixel-green-bright)]">
+                            🎮 Human Player
+                          </span>
+                          <span className="pixel-text-sm text-[var(--pixel-gold)]">
+                            FREE
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <span className="pixel-text-sm text-[var(--pixel-text-dim)]">
+                          {
+                            AI_MODELS.find((m) => m.id === slot.modelId)
+                              ?.provider
+                          }
+                        </span>
+                        <span
+                          className={`pixel-text-sm ${getPricingStyle(
+                            AI_MODELS.find((m) => m.id === slot.modelId)
+                              ?.tier || 1
+                          )}`}
+                          title={`Tier ${
+                            AI_MODELS.find((m) => m.id === slot.modelId)
+                              ?.tier || 1
+                          }/5`}
+                        >
+                          {getPricingDisplay(
+                            AI_MODELS.find((m) => m.id === slot.modelId)
+                              ?.tier || 1
+                          )}
+                        </span>
+                      </div>
+                    )}
                   </>
                 )}
 
@@ -371,7 +424,23 @@ export default function PlayerSetup({
           </button>
 
           <p className="pixel-text-sm text-[var(--pixel-text-dim)] mt-4 text-center">
-            {enabledCount} ALCHEMIST{enabledCount !== 1 ? "S" : ""} WILL COMPETE
+            {humanCount > 0 ? (
+              <>
+                <span className="text-[var(--pixel-green-bright)]">YOU</span>
+                {enabledCount > 1 && (
+                  <>
+                    {" + "}
+                    {enabledCount - humanCount} AI
+                    {enabledCount - humanCount !== 1 ? "s" : ""}
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                {enabledCount} AI{enabledCount !== 1 ? "s" : ""}
+              </>
+            )}{" "}
+            WILL COMPETE
             <br />
             OVER {days} DAY{days !== 1 ? "S" : ""} OF TRADING
           </p>
@@ -484,6 +553,9 @@ export default function PlayerSetup({
       {/* Decorative bottom border */}
       <div className="absolute bottom-8 left-0 right-0 h-4 bg-[var(--pixel-gold-dark)] opacity-20" />
       <div className="absolute bottom-0 left-0 right-0 h-8 bg-[var(--pixel-gold)] opacity-20" />
+
+      {/* Rules Modal */}
+      <GameRulesModal isOpen={showRules} onClose={() => setShowRules(false)} />
     </div>
   );
 }

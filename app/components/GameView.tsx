@@ -4,6 +4,8 @@ import { useState, useMemo, useEffect } from "react";
 import {
   GameState,
   Player,
+  PlayerInputs,
+  PlayerOutputs,
   HERB_NAMES,
   POTION_NAMES,
   HerbId,
@@ -15,6 +17,7 @@ import {
   RECIPES,
 } from "@/lib/types";
 import { GamePhase } from "@/lib/hooks/use-game-stream";
+import HumanPlayerUI from "./HumanPlayerUI";
 
 interface GameViewProps {
   dayStates: GameState[];
@@ -23,7 +26,14 @@ interface GameViewProps {
   seed: string | null;
   daysCompleted: number;
   totalDays: number;
+  waitingForHuman?: {
+    playerIdx: number;
+    hookToken: string;
+    playerInputs: PlayerInputs;
+    herbPrices: Record<HerbId, number>;
+  };
   onReset: () => void;
+  onSubmitHumanTurn: (hookToken: string, outputs: PlayerOutputs) => Promise<boolean>;
 }
 
 type ViewMode = "overview" | "details";
@@ -47,12 +57,28 @@ export default function GameView({
   seed,
   daysCompleted,
   totalDays,
+  waitingForHuman,
   onReset,
+  onSubmitHumanTurn,
 }: GameViewProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("overview");
   const [selectedDay, setSelectedDay] = useState(1);
   const [selectedPlayerIdx, setSelectedPlayerIdx] = useState(0);
   const [autoAdvance, setAutoAdvance] = useState(true);
+  const [isSubmittingHumanTurn, setIsSubmittingHumanTurn] = useState(false);
+
+  // Handle human player turn submission
+  const handleHumanSubmit = async (outputs: PlayerOutputs) => {
+    if (!waitingForHuman) return;
+    setIsSubmittingHumanTurn(true);
+    try {
+      await onSubmitHumanTurn(waitingForHuman.hookToken, outputs);
+    } catch (error) {
+      console.error("Failed to submit turn:", error);
+    } finally {
+      setIsSubmittingHumanTurn(false);
+    }
+  };
 
   // Auto-advance to latest day
   useEffect(() => {
@@ -148,6 +174,19 @@ export default function GameView({
       .sort((a, b) => b.silver - a.silver);
     return finalRankings[0];
   }, [isCompleted, latestState, players]);
+
+  // Human player turn - show interactive UI
+  if (waitingForHuman) {
+    return (
+      <HumanPlayerUI
+        playerInputs={waitingForHuman.playerInputs}
+        herbPrices={waitingForHuman.herbPrices}
+        hookToken={waitingForHuman.hookToken}
+        onSubmit={handleHumanSubmit}
+        isSubmitting={isSubmittingHumanTurn}
+      />
+    );
+  }
 
   // Loading state
   if (!currentState) {
