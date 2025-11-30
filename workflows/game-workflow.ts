@@ -11,13 +11,13 @@ import { aiPlayerStep } from "./ai-player-step";
 export async function gameWorkflow(config: GameConfig) {
   "use workflow";
   const writable = getWritable();
-  const game = setupGame(config);
-  let gameState = initializeGameState(config);
+  const game = setupGame(config.generation);
+  let gameState = initializeGameState(config.runtime);
   await streamContentToClient(writable, gameState);
 
-  for (let day = 1; day <= config.days; day++) {
-    console.log(`Starting day ${day} of ${config.days}`);
-    const promises = config.players.map(async (player, idx) => {
+  for (let day = 1; day <= config.generation.days; day++) {
+    console.log(`Starting day ${day} of ${config.generation.days}`);
+    const promises = config.runtime.players.map(async (player, idx) => {
       const playerInput = getPlayerInputs(game, config, day, gameState, idx);
       return aiPlayerStep(playerInput, player.model);
     });

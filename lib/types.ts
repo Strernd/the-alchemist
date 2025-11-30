@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export type GameConfig = {
+export type GenerationConfig = {
   seed: string;
   days: number;
   herbTierBasePrices: Record<Tier, number>;
@@ -9,8 +9,16 @@ export type GameConfig = {
   potionTierBaseDemands: Record<Tier, number>;
   potionTierBaseDemandSpread: Record<Tier, number>;
   potionDailyDemandSpread: number;
+};
+
+export type RuntimeConfig = {
   players: Player[];
   startingSilver: number;
+};
+
+export type GameConfig = {
+  generation: GenerationConfig;
+  runtime: RuntimeConfig;
 };
 
 export type PlayerInventory = {

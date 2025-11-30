@@ -1,6 +1,7 @@
 import { mapValues } from "lodash";
 import { Random } from "random";
 import {
+  GenerationConfig,
   Game,
   GameConfig,
   GameState,
@@ -15,9 +16,10 @@ import {
   PotionId,
   PotionOffer,
   RECIPES,
+  RuntimeConfig,
   Tier,
 } from "./types";
-export function setupGame(config: GameConfig): Game {
+export function setupGame(config: GenerationConfig): Game {
   const rng = new Random(config.seed);
   const herbDailyPrices = createHerbDailyPrices(config, rng);
   const potionDailyDemands = createPotionDailyDemands(config, rng);
@@ -25,7 +27,7 @@ export function setupGame(config: GameConfig): Game {
   return { herbDailyPrices, potionDailyDemands };
 }
 
-export function initializeGameState(config: GameConfig): GameState {
+export function initializeGameState(config: RuntimeConfig): GameState {
   return {
     currentDay: 1,
     playerInventories: config.players.map(() => ({
@@ -46,20 +48,23 @@ export function getPlayerInputs(
   playerIdx: number
 ): PlayerInputs {
   // TODO: get market data
+  const dayIndex = day - 1;
+  const previousMarket =
+    dayIndex > 0 ? gameState.processedMarketByDay[dayIndex - 1] : undefined;
   return {
     inventory: gameState.playerInventories[playerIdx],
-    dailyPrices: game.herbDailyPrices[day],
+    dailyPrices: game.herbDailyPrices[dayIndex],
     historicDemands: gameState.processedMarketByDay.map(
       (processedMarket) => processedMarket.potionInformation
     ),
     yesterdaysErrors: gameState.lastDayErrorsByPlayer[playerIdx] || [],
     yesterdaysExecutedOffers:
-      gameState.processedMarketByDay[day - 1].processedOffers.filter(
+      previousMarket?.processedOffers.filter(
         (offer) => offer.playerIdx === playerIdx
       ) || [],
     meta: {
-      playCount: config.players.length,
-      totalDays: config.days,
+      playCount: config.runtime.players.length,
+      totalDays: config.generation.days,
       currentDay: day,
     },
   };
@@ -70,6 +75,7 @@ export function processGameDay(
   gameState: GameState,
   game: Game
 ): GameState {
+  const dayIndex = gameState.currentDay - 1;
   const newGameState = {
     ...gameState,
     playerInventories: [] as PlayerInventory[],
@@ -82,7 +88,7 @@ export function processGameDay(
     const { inventory, errors, executableOffers } = sanitizePlayerOutputs(
       gameState.playerInventories[idx],
       playerOutput,
-      game.herbDailyPrices[gameState.currentDay]
+      game.herbDailyPrices[dayIndex]
     );
     newGameState.lastDayErrorsByPlayer.push(errors);
     newGameState.unprocessedOffersByDay.push(executableOffers);
@@ -93,7 +99,7 @@ export function processGameDay(
   const market = buildMarket(offers);
   const processedMarket = processMarket(
     market,
-    game.potionDailyDemands[gameState.currentDay]
+    game.potionDailyDemands[dayIndex]
   );
   newGameState.processedMarketByDay.push(processedMarket);
 
@@ -111,6 +117,7 @@ export function processGameDay(
   );
 
   newGameState.playerInventories = newPlayerInventories;
+  newGameState.currentDay = gameState.currentDay + 1;
   return newGameState;
 }
 
@@ -136,6 +143,7 @@ export function sanitizePlayerOutputs(
       );
     }
   }
+  playerInventory.silver = silver;
   for (const potionOrder of outputs.makePotions) {
     const [herb1, herb2] = RECIPES[potionOrder.potionId];
     const makeQty = Math.min(
@@ -188,8 +196,8 @@ function processMarket(
   >;
   const processedOffers = [] as PotionOffer[];
   Object.entries(demands).forEach(([potionId, demand]) => {
-    const offers = market[potionId as PotionId];
-    const processedOffers = [] as PotionOffer[];
+    const offers = market[potionId as PotionId] || [];
+    const processedOffersForPotion = [] as PotionOffer[];
     let fulfilled = 0;
     let remaining = demand;
     let highestPrice = 0;
@@ -198,12 +206,12 @@ function processMarket(
       const actualSold = Math.min(remaining, offer.qty);
       fulfilled += actualSold;
       remaining -= actualSold;
-      processedOffers.push({ ...offer, actuallySold: actualSold });
+      processedOffersForPotion.push({ ...offer, actuallySold: actualSold });
       if (actualSold > 0) {
         highestPrice = offer.price;
       }
     }
-    processedOffers.push(...processedOffers);
+    processedOffers.push(...processedOffersForPotion);
     potionInformation[potionId as PotionId] = {
       fulfilled,
       remaining,
@@ -215,7 +223,10 @@ function processMarket(
 }
 
 export function buildMarket(executedOffers: PotionOffer[][]) {
-  const market = {} as Record<PotionId, PotionOffer[]>;
+  const market = Object.keys(POTION_NAMES).reduce((acc, potionId) => {
+    acc[potionId as PotionId] = [];
+    return acc;
+  }, {} as Record<PotionId, PotionOffer[]>);
   executedOffers.forEach((playerOffers, idx) => {
     playerOffers.forEach((offer) => {
       market[offer.potionId].push({ ...offer, playerIdx: idx });
@@ -228,7 +239,7 @@ export function buildMarket(executedOffers: PotionOffer[][]) {
   return sortedMarket;
 }
 
-function initializePlayerInventory(config: GameConfig): PlayerInventory {
+function initializePlayerInventory(config: RuntimeConfig): PlayerInventory {
   return {
     herbs: Object.keys(HERB_NAMES).reduce((acc, herb) => {
       acc[herb as HerbId] = 0;
@@ -242,7 +253,7 @@ function initializePlayerInventory(config: GameConfig): PlayerInventory {
   };
 }
 
-function createHerbBasePrices(config: GameConfig, rng: Random) {
+function createHerbBasePrices(config: GenerationConfig, rng: Random) {
   const prices = {} as Record<HerbId, number>;
   for (const [tier, herbs] of Object.entries(HERB_TIERS)) {
     const tierBasePrice = config.herbTierBasePrices[tier as Tier];
@@ -257,7 +268,7 @@ function createHerbBasePrices(config: GameConfig, rng: Random) {
   return prices;
 }
 
-function createHerbDailyPrices(config: GameConfig, rng: Random) {
+function createHerbDailyPrices(config: GenerationConfig, rng: Random) {
   const basePrices = createHerbBasePrices(config, rng);
   const dayPrices = [] as Array<Record<HerbId, number>>;
   for (let day = 0; day < config.days; day++) {
@@ -274,7 +285,7 @@ function createHerbDailyPrices(config: GameConfig, rng: Random) {
   return dayPrices;
 }
 
-function createPotionBaseDemands(config: GameConfig, rng: Random) {
+function createPotionBaseDemands(config: GenerationConfig, rng: Random) {
   const demands = {} as Record<PotionId, number>;
   for (const [tier, potions] of Object.entries(POTION_TIERS)) {
     const tierBaseDemand = config.potionTierBaseDemands[tier as Tier];
@@ -290,7 +301,7 @@ function createPotionBaseDemands(config: GameConfig, rng: Random) {
   return demands;
 }
 
-function createPotionDailyDemands(config: GameConfig, rng: Random) {
+function createPotionDailyDemands(config: GenerationConfig, rng: Random) {
   const baseDemands = createPotionBaseDemands(config, rng);
   const dayDemands = [] as Array<Record<PotionId, number>>;
   for (let day = 0; day < config.days; day++) {
