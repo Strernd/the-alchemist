@@ -9,10 +9,18 @@ const nameSchema = z.object({
     ),
 });
 
+export type UsageData = {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  durationMs: number;
+};
+
 export type NameResult = {
   name: string;
   success: boolean;
   error?: string;
+  usage?: UsageData;
 };
 
 export async function chooseAlchemistName(
@@ -29,26 +37,50 @@ Keep it short (1-3 words). No full sentences.
 Respond ONLY with a json object containing the alchemistName. Example: {"alchemistName": "Zephyr"}
 `;
 
+  const startTime = Date.now();
+
   try {
-    const { object } = await generateObject({
+    const { object, usage } = await generateObject({
       model: modelId,
       schema: nameSchema,
       prompt,
-      maxOutputTokens: 50,
+      mode: "json",
     });
 
-    // Sanitize: trim, limit to 20 chars, remove special chars
+    const durationMs = Date.now() - startTime;
+
+    // Sanitize: trim, remove special chars, crop to reasonable length for UI
     let name = object.alchemistName?.trim() || "";
     name = name.replace(/[^\w\s'-]/g, "").trim();
-    name = name.slice(0, 20);
+    // Take first 25 chars to keep UI clean
+    name = name.slice(0, 25);
 
     if (!name || name.length < 2) {
       name = "Unnamed";
     }
 
-    console.log(`[Name] ${modelId} → "${name}"`);
-    return { name, success: true };
+    // AI SDK LanguageModelV2Usage has inputTokens/outputTokens
+    const inputTokens = usage?.inputTokens || 0;
+    const outputTokens = usage?.outputTokens || 0;
+    const totalTokens = usage?.totalTokens || inputTokens + outputTokens;
+
+    console.log(
+      `[Name] ${modelId} → "${name}" (${durationMs}ms, ${inputTokens}in/${outputTokens}out tokens)`
+    );
+
+    return {
+      name,
+      success: true,
+      usage: {
+        inputTokens,
+        outputTokens,
+        totalTokens,
+        durationMs,
+      },
+    };
   } catch (error: unknown) {
+    const durationMs = Date.now() - startTime;
+
     // Extract useful info from AI_NoObjectGeneratedError
     const err = error as {
       name?: string;
@@ -56,9 +88,14 @@ Respond ONLY with a json object containing the alchemistName. Example: {"alchemi
       text?: string;
       finishReason?: string;
       cause?: Error;
+      usage?: {
+        inputTokens?: number;
+        outputTokens?: number;
+        totalTokens?: number;
+      };
     };
 
-    console.error(`[Name] ✗ ${modelId} FAILED`);
+    console.error(`[Name] ✗ ${modelId} FAILED (${durationMs}ms)`);
     console.error(`[Name]   reason: ${err.finishReason || "unknown"}`);
     console.error(`[Name]   raw text: ${err.text || "none"}`);
     if (err.cause) {
@@ -70,6 +107,12 @@ Respond ONLY with a json object containing the alchemistName. Example: {"alchemi
       name: "[DISQUALIFIED]",
       success: false,
       error: `${err.finishReason || "error"}: ${errorMsg.slice(0, 100)}`,
+      usage: {
+        inputTokens: err.usage?.inputTokens || 0,
+        outputTokens: err.usage?.outputTokens || 0,
+        totalTokens: err.usage?.totalTokens || 0,
+        durationMs,
+      },
     };
   }
 }

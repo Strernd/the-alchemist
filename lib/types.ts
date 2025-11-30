@@ -71,6 +71,16 @@ export type DayRecord = {
   marketSummary: ProcessedMarket;
 };
 
+// Token usage and cost tracking per player
+export type PlayerUsageStats = {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  costUsd: number;
+  totalTimeMs: number;
+  callCount: number;
+};
+
 export type GameState = {
   currentDay: number;
   playerInventories: PlayerInventory[];
@@ -84,6 +94,8 @@ export type GameState = {
   playerNames?: string[];
   // Players that have been disqualified due to errors (by index)
   disqualifiedPlayers?: { playerIdx: number; reason: string }[];
+  // Token usage and cost tracking per player (by index)
+  playerUsageStats?: PlayerUsageStats[];
 };
 
 export type ProcessedMarket = {

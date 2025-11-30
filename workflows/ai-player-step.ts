@@ -6,6 +6,7 @@ import {
   PotionId,
 } from "@/lib/types";
 import { generateObject } from "ai";
+import { UsageData } from "./name-step";
 import {
   formatInventory,
   getCraftableWithCurrentHerbs,
@@ -18,6 +19,7 @@ export type PlayerStepResult = {
   outputs: PlayerOutputs;
   success: boolean;
   error?: string;
+  usage?: UsageData;
 };
 
 const EMPTY_OUTPUTS: PlayerOutputs = {
@@ -33,7 +35,7 @@ export async function aiPlayerStep(
 ): Promise<PlayerStepResult> {
   "use step";
 
-  // Skip disqualified players - return empty outputs
+  // Skip disqualified players - return empty outputs with no usage
   if (isDisqualified) {
     return { outputs: EMPTY_OUTPUTS, success: true };
   }
@@ -82,22 +84,42 @@ ${
 }
 `;
 
-  console.log("Prompting model:", modelId);
+  const startTime = Date.now();
 
   try {
-    const { object } = await generateObject({
+    const { object, usage } = await generateObject({
       model: modelId,
       schema: playerOutputsSchema,
       system: PLAYER_SYSTEM_PROMPT,
       prompt: userPrompt,
-      maxOutputTokens: 1500,
+      mode: "json",
     });
 
+    const durationMs = Date.now() - startTime;
     const sanitized = sanitizeAIResponse(object);
-    console.log("Model response sanitized:", sanitized);
 
-    return { outputs: sanitized, success: true };
+    // AI SDK LanguageModelV2Usage has inputTokens/outputTokens
+    const inputTokens = usage?.inputTokens || 0;
+    const outputTokens = usage?.outputTokens || 0;
+    const totalTokens = usage?.totalTokens || inputTokens + outputTokens;
+
+    console.log(
+      `[Step] ${modelId} day ${inputs.meta.currentDay}: ${durationMs}ms, ${inputTokens}in/${outputTokens}out tokens`
+    );
+
+    return {
+      outputs: sanitized,
+      success: true,
+      usage: {
+        inputTokens,
+        outputTokens,
+        totalTokens,
+        durationMs,
+      },
+    };
   } catch (error: unknown) {
+    const durationMs = Date.now() - startTime;
+
     // Extract useful info from AI_NoObjectGeneratedError
     const err = error as {
       name?: string;
@@ -105,9 +127,14 @@ ${
       text?: string;
       finishReason?: string;
       cause?: Error;
+      usage?: {
+        inputTokens?: number;
+        outputTokens?: number;
+        totalTokens?: number;
+      };
     };
 
-    console.error(`[Step] ✗ ${modelId} FAILED`);
+    console.error(`[Step] ✗ ${modelId} FAILED (${durationMs}ms)`);
     console.error(`[Step]   reason: ${err.finishReason || "unknown"}`);
     console.error(`[Step]   raw text: ${err.text?.slice(0, 200) || "none"}`);
     if (err.cause) {
@@ -120,10 +147,17 @@ ${
       100
     )}`;
     console.log(`[Step] Returning failure result with error: ${errorResult}`);
+
     return {
       outputs: EMPTY_OUTPUTS,
       success: false,
       error: errorResult,
+      usage: {
+        inputTokens: err.usage?.inputTokens || 0,
+        outputTokens: err.usage?.outputTokens || 0,
+        totalTokens: err.usage?.totalTokens || 0,
+        durationMs,
+      },
     };
   }
 }

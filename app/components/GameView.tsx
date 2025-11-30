@@ -99,6 +99,9 @@ export default function GameView({
       const startingSilver = dayStates[0]?.playerInventories[idx]?.silver || 1000;
       const profitLoss = currentSilver - startingSilver;
 
+      // Get usage stats from latest state
+      const usageStats = latestState.playerUsageStats?.[idx];
+
       return {
         player,
         playerIdx: idx,
@@ -112,6 +115,13 @@ export default function GameView({
         revenue: totalRevenue,
         errors: totalErrors,
         successRate: totalOffered > 0 ? Math.round((totalSold / totalOffered) * 100) : 0,
+        // Usage stats
+        inputTokens: usageStats?.inputTokens || 0,
+        outputTokens: usageStats?.outputTokens || 0,
+        totalTokens: usageStats?.totalTokens || 0,
+        costUsd: usageStats?.costUsd || 0,
+        totalTimeMs: usageStats?.totalTimeMs || 0,
+        callCount: usageStats?.callCount || 0,
       };
     }).sort((a, b) => b.silver - a.silver);
   }, [dayStates, latestState, players]);
@@ -301,35 +311,55 @@ function OverviewView({
     revenue: number;
     errors: number;
     successRate: number;
+    // Usage stats
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    costUsd: number;
+    totalTimeMs: number;
+    callCount: number;
   }[];
   daysCompleted: number;
   totalDays: number;
   phase: GamePhase;
   onViewDetails: (playerIdx: number) => void;
 }) {
+  // Calculate totals for summary
+  const totalCost = playerStats.reduce((s, p) => s + p.costUsd, 0);
+  const totalTokens = playerStats.reduce((s, p) => s + p.totalTokens, 0);
   return (
     <div className="space-y-4">
       {/* Summary Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <div className="pixel-frame p-4 text-center">
           <div className="pixel-text-sm text-[var(--pixel-text-dim)]">PROGRESS</div>
-          <div className="pixel-title text-2xl">{daysCompleted}/{totalDays}</div>
+          <div className="pixel-title text-xl">{daysCompleted}/{totalDays}</div>
           <div className="pixel-text-sm text-[var(--pixel-text-dim)]">days</div>
         </div>
         <div className="pixel-frame p-4 text-center">
           <div className="pixel-text-sm text-[var(--pixel-text-dim)]">PLAYERS</div>
-          <div className="pixel-title text-2xl">{playerStats.length}</div>
+          <div className="pixel-title text-xl">{playerStats.length}</div>
           <div className="pixel-text-sm text-[var(--pixel-text-dim)]">competing</div>
         </div>
         <div className="pixel-frame p-4 text-center">
-          <div className="pixel-text-sm text-[var(--pixel-text-dim)]">TOTAL SALES</div>
-          <div className="pixel-title text-2xl">{playerStats.reduce((s, p) => s + p.sold, 0)}</div>
+          <div className="pixel-text-sm text-[var(--pixel-text-dim)]">SALES</div>
+          <div className="pixel-title text-xl">{playerStats.reduce((s, p) => s + p.sold, 0)}</div>
           <div className="pixel-text-sm text-[var(--pixel-text-dim)]">potions</div>
+        </div>
+        <div className="pixel-frame p-4 text-center">
+          <div className="pixel-text-sm text-[var(--pixel-text-dim)]">TOKENS</div>
+          <div className="pixel-title text-xl">{(totalTokens / 1000).toFixed(1)}k</div>
+          <div className="pixel-text-sm text-[var(--pixel-text-dim)]">used</div>
+        </div>
+        <div className="pixel-frame p-4 text-center">
+          <div className="pixel-text-sm text-[var(--pixel-text-dim)]">COST</div>
+          <div className="pixel-title text-xl">${totalCost.toFixed(4)}</div>
+          <div className="pixel-text-sm text-[var(--pixel-text-dim)]">USD</div>
         </div>
         <div className="pixel-frame p-4 text-center">
           <div className="pixel-text-sm text-[var(--pixel-text-dim)]">STATUS</div>
           <div className={`pixel-title text-lg ${phase === "completed" ? "text-[var(--pixel-green-bright)]" : "text-[var(--pixel-orange)]"}`}>
-            {phase === "completed" ? "FINISHED" : "RUNNING"}
+            {phase === "completed" ? "DONE" : "LIVE"}
           </div>
         </div>
       </div>
@@ -370,26 +400,40 @@ function OverviewView({
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-2 gap-2 text-center">
+            <div className="grid grid-cols-3 gap-2 text-center">
               <div className="pixel-frame p-2">
-                <div className="pixel-text-sm text-[var(--pixel-green-bright)]">🌿 HERBS</div>
+                <div className="pixel-text-sm text-[var(--pixel-green-bright)]">🌿</div>
                 <div className="pixel-text">{stats.herbsBought}</div>
-                <div className="pixel-text-sm text-[var(--pixel-text-dim)]">-{stats.herbCost}g</div>
+                <div className="pixel-text-sm text-[var(--pixel-text-dim)]">herbs</div>
               </div>
               <div className="pixel-frame p-2">
-                <div className="pixel-text-sm text-[var(--pixel-purple-bright)]">⚗️ POTIONS</div>
+                <div className="pixel-text-sm text-[var(--pixel-purple-bright)]">⚗️</div>
                 <div className="pixel-text">{stats.potionsMade}</div>
-                <div className="pixel-text-sm text-[var(--pixel-text-dim)]">crafted</div>
+                <div className="pixel-text-sm text-[var(--pixel-text-dim)]">potions</div>
               </div>
               <div className="pixel-frame p-2">
-                <div className="pixel-text-sm text-[var(--pixel-blue-bright)]">🏪 SALES</div>
+                <div className="pixel-text-sm text-[var(--pixel-blue-bright)]">🏪</div>
                 <div className="pixel-text">{stats.sold}/{stats.offered}</div>
-                <div className="pixel-text-sm text-[var(--pixel-text-dim)]">{stats.successRate}% rate</div>
+                <div className="pixel-text-sm text-[var(--pixel-text-dim)]">sold</div>
+              </div>
+            </div>
+
+            {/* Usage Stats */}
+            <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+              <div className="pixel-frame p-2">
+                <div className="pixel-text-sm text-[var(--pixel-text-dim)]">🔤</div>
+                <div className="pixel-text">{(stats.totalTokens / 1000).toFixed(1)}k</div>
+                <div className="pixel-text-sm text-[var(--pixel-text-dim)]">tokens</div>
               </div>
               <div className="pixel-frame p-2">
-                <div className="pixel-text-sm text-[var(--pixel-gold)]">💰 REVENUE</div>
-                <div className="pixel-text">+{stats.revenue}g</div>
-                <div className="pixel-text-sm text-[var(--pixel-text-dim)]">earned</div>
+                <div className="pixel-text-sm text-[var(--pixel-text-dim)]">💵</div>
+                <div className="pixel-text">${stats.costUsd.toFixed(4)}</div>
+                <div className="pixel-text-sm text-[var(--pixel-text-dim)]">cost</div>
+              </div>
+              <div className="pixel-frame p-2">
+                <div className="pixel-text-sm text-[var(--pixel-text-dim)]">⏱️</div>
+                <div className="pixel-text">{(stats.totalTimeMs / 1000).toFixed(1)}s</div>
+                <div className="pixel-text-sm text-[var(--pixel-text-dim)]">time</div>
               </div>
             </div>
 
@@ -730,9 +774,12 @@ function MarketSummary({
   potionDemands: Record<PotionId, number>;
   players: Player[];
 }) {
-  // Filter to potions that had demand
+  // Show all potions that had any market activity (demand, sales, or remaining unfilled)
   const activePotions = Object.entries(marketSummary.potionInformation).filter(
-    ([, info]) => info.fulfilled > 0 || info.remaining > 0 || potionDemands[info as unknown as PotionId] > 0
+    ([potionId, info]) => {
+      const demand = potionDemands[potionId as PotionId] || 0;
+      return demand > 0 || info.fulfilled > 0 || info.remaining > 0;
+    }
   );
 
   return (
@@ -751,7 +798,7 @@ function MarketSummary({
             </tr>
           </thead>
           <tbody>
-            {activePotions.slice(0, 10).map(([potionId, info]) => {
+            {activePotions.map(([potionId, info]) => {
               const demand = potionDemands[potionId as PotionId] || 0;
               return (
                 <tr key={potionId}>

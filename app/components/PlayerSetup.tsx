@@ -84,17 +84,14 @@ export default function PlayerSetup({
 
   const modelsByProvider = getModelsByProvider();
 
-  const getTierStyle = (tier: string) => {
-    switch (tier) {
-      case "leading":
-        return "text-[var(--pixel-gold)] border-[var(--pixel-gold)]";
-      case "fast":
-        return "text-[var(--pixel-blue-bright)] border-[var(--pixel-blue-bright)]";
-      case "cheap":
-        return "text-[var(--pixel-green-bright)] border-[var(--pixel-green-bright)]";
-      default:
-        return "text-[var(--pixel-text-dim)] border-[var(--pixel-border)]";
-    }
+  const getPricingDisplay = (tier: number) => {
+    return "💰".repeat(tier);
+  };
+
+  const getPricingStyle = (tier: number) => {
+    if (tier <= 2) return "text-[var(--pixel-green-bright)]";
+    if (tier <= 3) return "text-[var(--pixel-gold)]";
+    return "text-[var(--pixel-red)]";
   };
 
   const getStatusColor = (status: string) => {
@@ -268,6 +265,7 @@ export default function PlayerSetup({
                           >
                             {models.map((model) => (
                               <option key={model.id} value={model.id}>
+                                {"💰".repeat(model.tier).padEnd(10, " ")}{" "}
                                 {model.name}
                               </option>
                             ))}
@@ -281,12 +279,19 @@ export default function PlayerSetup({
                         {AI_MODELS.find((m) => m.id === slot.modelId)?.provider}
                       </span>
                       <span
-                        className={`pixel-text-sm px-2 py-1 border-2 uppercase ${getTierStyle(
+                        className={`pixel-text-sm ${getPricingStyle(
                           AI_MODELS.find((m) => m.id === slot.modelId)?.tier ||
-                            ""
+                            1
                         )}`}
+                        title={`Tier ${
+                          AI_MODELS.find((m) => m.id === slot.modelId)?.tier ||
+                          1
+                        }/5`}
                       >
-                        {AI_MODELS.find((m) => m.id === slot.modelId)?.tier}
+                        {getPricingDisplay(
+                          AI_MODELS.find((m) => m.id === slot.modelId)?.tier ||
+                            1
+                        )}
                       </span>
                     </div>
                   </>
