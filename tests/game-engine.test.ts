@@ -1,4 +1,3 @@
-import { describe, it, expect, beforeEach } from "vitest";
 import {
   buildMarket,
   getPlayerInputs,
@@ -7,7 +6,14 @@ import {
   sanitizePlayerOutputs,
   setupGame,
 } from "@/lib/game-engine";
-import { Game, GameConfig, PlayerOutputs, POTION_NAMES, PotionId } from "@/lib/types";
+import {
+  Game,
+  GameConfig,
+  PlayerOutputs,
+  POTION_NAMES,
+  PotionId,
+} from "@/lib/types";
+import { beforeEach, describe, expect, it } from "vitest";
 
 const baseConfig: GameConfig = {
   generation: {
@@ -28,12 +34,76 @@ const baseConfig: GameConfig = {
 
 const mockGame: Game = {
   herbDailyPrices: [
-    { H01: 5, H02: 5, H03: 5, H04: 5, H05: 5, H06: 5, H07: 5, H08: 5, H09: 5, H10: 5, H11: 5, H12: 5 },
-    { H01: 7, H02: 7, H03: 7, H04: 7, H05: 7, H06: 7, H07: 7, H08: 7, H09: 7, H10: 7, H11: 7, H12: 7 },
+    {
+      H01: 5,
+      H02: 5,
+      H03: 5,
+      H04: 5,
+      H05: 5,
+      H06: 5,
+      H07: 5,
+      H08: 5,
+      H09: 5,
+      H10: 5,
+      H11: 5,
+      H12: 5,
+    },
+    {
+      H01: 7,
+      H02: 7,
+      H03: 7,
+      H04: 7,
+      H05: 7,
+      H06: 7,
+      H07: 7,
+      H08: 7,
+      H09: 7,
+      H10: 7,
+      H11: 7,
+      H12: 7,
+    },
   ],
   potionDailyDemands: [
-    { P01: 1, P02: 1, P03: 1, P04: 1, P05: 1, P06: 1, P07: 1, P08: 1, P09: 1, P10: 1, P11: 1, P12: 1, P13: 1, P14: 1, P15: 1, P16: 1, P17: 1, P18: 1 },
-    { P01: 2, P02: 2, P03: 2, P04: 2, P05: 2, P06: 2, P07: 2, P08: 2, P09: 2, P10: 2, P11: 2, P12: 2, P13: 2, P14: 2, P15: 2, P16: 2, P17: 2, P18: 2 },
+    {
+      P01: 1,
+      P02: 1,
+      P03: 1,
+      P04: 1,
+      P05: 1,
+      P06: 1,
+      P07: 1,
+      P08: 1,
+      P09: 1,
+      P10: 1,
+      P11: 1,
+      P12: 1,
+      P13: 1,
+      P14: 1,
+      P15: 1,
+      P16: 1,
+      P17: 1,
+      P18: 1,
+    },
+    {
+      P01: 2,
+      P02: 2,
+      P03: 2,
+      P04: 2,
+      P05: 2,
+      P06: 2,
+      P07: 2,
+      P08: 2,
+      P09: 2,
+      P10: 2,
+      P11: 2,
+      P12: 2,
+      P13: 2,
+      P14: 2,
+      P15: 2,
+      P16: 2,
+      P17: 2,
+      P18: 2,
+    },
   ],
 };
 
@@ -88,9 +158,16 @@ describe("game engine", () => {
       };
       return acc;
     }, {} as Record<PotionId, { fulfilled: number; remaining: number; highestPrice: number; lowestPrice: number }>);
-    basePotionInfo.P01 = { fulfilled: 2, remaining: 1, highestPrice: 10, lowestPrice: 10 };
+    basePotionInfo.P01 = {
+      fulfilled: 2,
+      remaining: 1,
+      highestPrice: 10,
+      lowestPrice: 10,
+    };
     state.processedMarketByDay.push({
-      processedOffers: [{ potionId: "P01", price: 10, qty: 3, actuallySold: 2, playerIdx: 0 }],
+      processedOffers: [
+        { potionId: "P01", price: 10, qty: 3, actuallySold: 2, playerIdx: 0 },
+      ],
       potionInformation: basePotionInfo,
     });
     state.lastDayErrorsByPlayer = [["oops"]];
@@ -137,16 +214,30 @@ describe("game engine", () => {
     const result = sanitizePlayerOutputs(inventory, outputs, dailyPrices);
 
     expect(result.inventory.herbs.H01).toBe(expectedBought);
-    expect(result.inventory.silver).toBe(config.runtime.startingSilver - expectedBought * priceH01);
+    expect(result.inventory.silver).toBe(
+      config.runtime.startingSilver - expectedBought * priceH01
+    );
     expect(result.inventory.potions.P01).toBe(0);
-    expect(result.errors.some((err) => err.includes("Not enough herbs"))).toBe(true);
-    expect(result.errors.some((err) => err.includes("Not enough potions"))).toBe(true);
+    expect(result.errors.some((err) => err.includes("Not enough herbs"))).toBe(
+      true
+    );
+    expect(
+      result.errors.some((err) => err.includes("Not enough potions"))
+    ).toBe(true);
   });
 
   it("buildMarket sorts offers by price and tags player index", () => {
     const offers: PlayerOutputs[] = [
-      { buyHerbs: [], makePotions: [], potionOffers: [{ potionId: "P01", price: 4, qty: 1 }] },
-      { buyHerbs: [], makePotions: [], potionOffers: [{ potionId: "P01", price: 2, qty: 1 }] },
+      {
+        buyHerbs: [],
+        makePotions: [],
+        potionOffers: [{ potionId: "P01", price: 4, qty: 1 }],
+      },
+      {
+        buyHerbs: [],
+        makePotions: [],
+        potionOffers: [{ potionId: "P01", price: 2, qty: 1 }],
+      },
     ];
     const market = buildMarket(offers.map((o) => o.potionOffers));
 
@@ -157,18 +248,25 @@ describe("game engine", () => {
   it("processGameDay advances the day and records market results", () => {
     const game = setupGame(config.generation);
     let state = initializeGameState(config.runtime);
-    const outputs: PlayerOutputs[] = [{ buyHerbs: [], makePotions: [], potionOffers: [] }];
+    const outputs: PlayerOutputs[] = [
+      { buyHerbs: [], makePotions: [], potionOffers: [] },
+    ];
 
     state = processGameDay(outputs, state, game);
 
     expect(state.currentDay).toBe(2);
     expect(state.processedMarketByDay).toHaveLength(1);
-    expect(state.lastDayErrorsByPlayer).toHaveLength(config.runtime.players.length);
+    expect(state.lastDayErrorsByPlayer).toHaveLength(
+      config.runtime.players.length
+    );
   });
 
   it("plays a two-day deterministic game loop end-to-end", () => {
     const deterministicConfig: GameConfig = {
-      generation: { ...config.generation, days: mockGame.herbDailyPrices.length },
+      generation: {
+        ...config.generation,
+        days: mockGame.herbDailyPrices.length,
+      },
       runtime: structuredClone(config.runtime),
     };
     let state = initializeGameState(deterministicConfig.runtime);
@@ -191,8 +289,55 @@ describe("game engine", () => {
     });
 
     expect(state.currentDay).toBe(deterministicConfig.generation.days + 1);
-    expect(state.processedMarketByDay).toHaveLength(deterministicConfig.generation.days);
+    expect(state.processedMarketByDay).toHaveLength(
+      deterministicConfig.generation.days
+    );
     expect(state.playerInventories[0].silver).toBe(70); // 100 - 40 herbs + 10 silver from selling 1 potion (demand=1)
     expect(state.lastDayErrorsByPlayer[0]).toBeDefined();
+  });
+
+  it("returns unsold potions to inventory after market processing", () => {
+    // Setup: player offers 3 potions but demand is only 1
+    let state = initializeGameState(config.runtime);
+    // Manually give player some potions
+    state.playerInventories[0].potions.P01 = 5;
+
+    const outputs: PlayerOutputs[] = [
+      {
+        buyHerbs: [],
+        makePotions: [],
+        potionOffers: [{ potionId: "P01", price: 10, qty: 3 }], // Offer 3
+      },
+    ];
+
+    state = processGameDay(outputs, state, mockGame); // Demand for P01 is 1
+
+    // Should have: 5 - 3 offered + 2 unsold returned = 4 potions
+    // Silver: 100 + 10 (1 sold @ 10) = 110
+    expect(state.playerInventories[0].potions.P01).toBe(4);
+    expect(state.playerInventories[0].silver).toBe(110);
+  });
+
+  it("never allows potion inventory to go negative", () => {
+    let state = initializeGameState(config.runtime);
+    state.playerInventories[0].potions.P01 = 3;
+
+    const outputs: PlayerOutputs[] = [
+      {
+        buyHerbs: [],
+        makePotions: [],
+        potionOffers: [{ potionId: "P01", price: 10, qty: 3 }],
+      },
+    ];
+
+    state = processGameDay(outputs, state, mockGame);
+
+    // Verify inventory never goes negative
+    Object.values(state.playerInventories[0].potions).forEach((qty) => {
+      expect(qty).toBeGreaterThanOrEqual(0);
+    });
+    Object.values(state.playerInventories[0].herbs).forEach((qty) => {
+      expect(qty).toBeGreaterThanOrEqual(0);
+    });
   });
 });

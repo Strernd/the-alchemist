@@ -1,13 +1,15 @@
-import { mapValues } from "lodash";
+import { cloneDeep, mapValues } from "lodash";
 import { Random } from "random";
 import {
-  GenerationConfig,
+  DayRecord,
   Game,
   GameConfig,
   GameState,
+  GenerationConfig,
   HERB_NAMES,
   HERB_TIERS,
   HerbId,
+  PlayerDayActions,
   PlayerInputs,
   PlayerInventory,
   PlayerOutputs,
@@ -37,6 +39,7 @@ export function initializeGameState(config: RuntimeConfig): GameState {
     lastDayErrorsByPlayer: [],
     processedMarketByDay: [],
     unprocessedOffersByDay: [],
+    dayRecords: [],
   };
 }
 
@@ -76,46 +79,102 @@ export function processGameDay(
   game: Game
 ): GameState {
   const dayIndex = gameState.currentDay - 1;
+  const herbPrices = game.herbDailyPrices[dayIndex];
+  const potionDemands = game.potionDailyDemands[dayIndex];
+
   const newGameState = {
     ...gameState,
     playerInventories: [] as PlayerInventory[],
     lastDayErrorsByPlayer: [] as string[][],
+    dayRecords: [...gameState.dayRecords],
   };
+
   const offers = [] as PotionOffer[][];
   const playerInventoriesBeforeMarketProcessing = [] as PlayerInventory[];
+  const playerDayActions: PlayerDayActions[] = [];
+
   // Player Output phase
   playerOutputs.forEach((playerOutput, idx) => {
-    const { inventory, errors, executableOffers } = sanitizePlayerOutputs(
-      gameState.playerInventories[idx],
+    // Store start inventory (deep clone)
+    const startInventory = cloneDeep(gameState.playerInventories[idx]);
+
+    const {
+      inventory,
+      errors,
+      executableOffers,
+      actualBuyHerbs,
+      actualMakePotions,
+    } = sanitizePlayerOutputsDetailed(
+      cloneDeep(gameState.playerInventories[idx]),
       playerOutput,
-      game.herbDailyPrices[dayIndex]
+      herbPrices
     );
+
     newGameState.lastDayErrorsByPlayer.push(errors);
     newGameState.unprocessedOffersByDay.push(executableOffers);
     playerInventoriesBeforeMarketProcessing.push(inventory);
     offers.push(executableOffers);
+
+    // Start building player day actions (will complete after market)
+    playerDayActions.push({
+      startInventory,
+      requestedBuyHerbs: playerOutput.buyHerbs,
+      requestedMakePotions: playerOutput.makePotions,
+      requestedOffers: playerOutput.potionOffers,
+      actualBuyHerbs,
+      actualMakePotions,
+      actualOffers: executableOffers,
+      errors,
+      endInventory: inventory, // Will be updated after market
+      salesResults: [], // Will be populated after market
+    });
   });
+
   // Market phase
   const market = buildMarket(offers);
-  const processedMarket = processMarket(
-    market,
-    game.potionDailyDemands[dayIndex]
-  );
+  const processedMarket = processMarket(market, potionDemands);
   newGameState.processedMarketByDay.push(processedMarket);
 
-  // Player Inventory phase
+  // Player Inventory phase - update end inventories and sales results
   const newPlayerInventories = playerInventoriesBeforeMarketProcessing.map(
     (inventory, idx) => {
+      const playerSales: PlayerDayActions["salesResults"] = [];
+
       processedMarket.processedOffers
         .filter((offer) => offer.playerIdx === idx)
         .forEach((offer) => {
-          inventory.potions[offer.potionId] -= offer.actuallySold!;
-          inventory.silver += offer.price * offer.actuallySold!;
+          // Add back unsold potions (potions were already removed when creating offers)
+          inventory.potions[offer.potionId] += offer.qty - offer.actuallySold!;
+          const revenue = offer.price * offer.actuallySold!;
+          inventory.silver += revenue;
+
+          playerSales.push({
+            potionId: offer.potionId,
+            offered: offer.qty,
+            sold: offer.actuallySold!,
+            price: offer.price,
+            revenue,
+          });
         });
+
+      // Update player day actions with final data
+      playerDayActions[idx].endInventory = cloneDeep(inventory);
+      playerDayActions[idx].salesResults = playerSales;
+
       return inventory;
     }
   );
 
+  // Create day record
+  const dayRecord: DayRecord = {
+    day: gameState.currentDay,
+    herbPrices,
+    potionDemands,
+    playerActions: playerDayActions,
+    marketSummary: processedMarket,
+  };
+
+  newGameState.dayRecords.push(dayRecord);
   newGameState.playerInventories = newPlayerInventories;
   newGameState.currentDay = gameState.currentDay + 1;
   return newGameState;
@@ -130,13 +189,51 @@ export function sanitizePlayerOutputs(
   errors: string[];
   executableOffers: PotionOffer[];
 } {
+  const result = sanitizePlayerOutputsDetailed(
+    playerInventory,
+    outputs,
+    dailyPrices
+  );
+  return {
+    inventory: result.inventory,
+    errors: result.errors,
+    executableOffers: result.executableOffers,
+  };
+}
+
+export function sanitizePlayerOutputsDetailed(
+  playerInventory: PlayerInventory,
+  outputs: PlayerOutputs,
+  dailyPrices: Record<HerbId, number>
+): {
+  inventory: PlayerInventory;
+  errors: string[];
+  executableOffers: PotionOffer[];
+  actualBuyHerbs: { herbId: HerbId; qty: number; cost: number }[];
+  actualMakePotions: { potionId: PotionId; qty: number }[];
+} {
   const errors: string[] = [];
+  const actualBuyHerbs: { herbId: HerbId; qty: number; cost: number }[] = [];
+  const actualMakePotions: { potionId: PotionId; qty: number }[] = [];
+
   let silver = playerInventory.silver;
+
+  // Buy herbs
   for (const herbOrder of outputs.buyHerbs) {
     const herbPrice = dailyPrices[herbOrder.herbId];
     const boughtHerbs = Math.min(herbOrder.qty, Math.floor(silver / herbPrice));
-    silver -= boughtHerbs * herbPrice;
+    const cost = boughtHerbs * herbPrice;
+    silver -= cost;
     playerInventory.herbs[herbOrder.herbId] += boughtHerbs;
+
+    if (boughtHerbs > 0) {
+      actualBuyHerbs.push({
+        herbId: herbOrder.herbId,
+        qty: boughtHerbs,
+        cost,
+      });
+    }
+
     if (boughtHerbs !== herbOrder.qty) {
       errors.push(
         `Not enough silver to buy ${herbOrder.qty} ${herbOrder.herbId}. Bought ${boughtHerbs} herbs.`
@@ -144,6 +241,8 @@ export function sanitizePlayerOutputs(
     }
   }
   playerInventory.silver = silver;
+
+  // Make potions
   for (const potionOrder of outputs.makePotions) {
     const [herb1, herb2] = RECIPES[potionOrder.potionId];
     const makeQty = Math.min(
@@ -154,12 +253,22 @@ export function sanitizePlayerOutputs(
     playerInventory.herbs[herb1] -= makeQty;
     playerInventory.herbs[herb2] -= makeQty;
     playerInventory.potions[potionOrder.potionId] += makeQty;
+
+    if (makeQty > 0) {
+      actualMakePotions.push({
+        potionId: potionOrder.potionId,
+        qty: makeQty,
+      });
+    }
+
     if (makeQty !== potionOrder.qty) {
       errors.push(
         `Not enough herbs to make ${potionOrder.qty} ${potionOrder.potionId}. Made ${makeQty} potions.`
       );
     }
   }
+
+  // Create offers
   const executableOffers: PotionOffer[] = [];
   for (const potionOffer of outputs.potionOffers) {
     const offeredPotions = Math.min(
@@ -178,7 +287,14 @@ export function sanitizePlayerOutputs(
       );
     }
   }
-  return { inventory: playerInventory, errors, executableOffers };
+
+  return {
+    inventory: playerInventory,
+    errors,
+    executableOffers,
+    actualBuyHerbs,
+    actualMakePotions,
+  };
 }
 
 function processMarket(

@@ -30,7 +30,16 @@ export async function gameWorkflow(config: GameConfig) {
     await streamContentToClient(writable, gameState);
   }
 
+  // Close the stream to signal completion to clients
+  await closeStream(writable);
+
   return gameState;
+}
+
+async function closeStream(writable: WritableStream) {
+  "use step";
+  const writer = writable.getWriter();
+  await writer.close();
 }
 
 async function streamContentToClient(
@@ -39,6 +48,7 @@ async function streamContentToClient(
 ) {
   "use step";
   const writer = writable.getWriter();
-  await writer.write(JSON.stringify(gameState));
+  // Add newline delimiter so client can parse separate JSON objects
+  await writer.write(JSON.stringify(gameState) + "\n");
   writer.releaseLock();
 }

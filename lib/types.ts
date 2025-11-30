@@ -37,6 +37,40 @@ export type Game = {
   potionDailyDemands: Record<PotionId, number>[];
 };
 
+// Detailed record of what happened in a day for each player
+export type PlayerDayActions = {
+  // Inventory at start of day (before any actions)
+  startInventory: PlayerInventory;
+  // What the AI requested
+  requestedBuyHerbs: { herbId: HerbId; qty: number }[];
+  requestedMakePotions: { potionId: PotionId; qty: number }[];
+  requestedOffers: PotionOffer[];
+  // What actually happened (after validation)
+  actualBuyHerbs: { herbId: HerbId; qty: number; cost: number }[];
+  actualMakePotions: { potionId: PotionId; qty: number }[];
+  actualOffers: PotionOffer[];
+  // Errors during validation
+  errors: string[];
+  // Inventory at end of day (after market)
+  endInventory: PlayerInventory;
+  // Market results for this player
+  salesResults: {
+    potionId: PotionId;
+    offered: number;
+    sold: number;
+    price: number;
+    revenue: number;
+  }[];
+};
+
+export type DayRecord = {
+  day: number;
+  herbPrices: Record<HerbId, number>;
+  potionDemands: Record<PotionId, number>;
+  playerActions: PlayerDayActions[];
+  marketSummary: ProcessedMarket;
+};
+
 export type GameState = {
   currentDay: number;
   playerInventories: PlayerInventory[];
@@ -44,6 +78,8 @@ export type GameState = {
   lastDayErrorsByPlayer: string[][];
   unprocessedOffersByDay: PotionOffer[][];
   processedMarketByDay: ProcessedMarket[];
+  // New: detailed day-by-day records
+  dayRecords: DayRecord[];
 };
 
 export type ProcessedMarket = {
@@ -77,20 +113,20 @@ export const playerOutputsSchema = z.object({
   buyHerbs: z.array(
     z.object({
       herbId: z.string().regex(/^H(0[1-9]|1[0-2])$/),
-      qty: z.number().int().positive(),
+      qty: z.number().int().positive().min(0),
     })
   ),
   makePotions: z.array(
     z.object({
       potionId: z.string().regex(/^P(0[1-9]|1[0-8])$/),
-      qty: z.number().int().positive(),
+      qty: z.number().int().positive().min(0),
     })
   ),
   potionOffers: z.array(
     z.object({
       potionId: z.string().regex(/^P(0[1-9]|1[0-8])$/),
       price: z.number().int().positive(),
-      qty: z.number().int().positive(),
+      qty: z.number().int().positive().min(0),
     })
   ),
 });

@@ -1,7 +1,7 @@
 import { POTION_TIER_LOOKUP, PotionId, RECIPES } from "@/lib/types";
 
 export const PLAYER_SYSTEM_PROMPT = `
-You are playing "The Alchemist", a competitive trading game. Your goal is to finish with the most gold.
+You are playing "The Alchemist", a competitive trading game. Your goal is to finish with the most gold. Take strategic decisions to sell the potions at the right price to maximize your gold.
 
 ## GAME RULES
 Every alchemist starts with some silver and can buy herbs from the market. Herb prices fluctuate daily. The alchemists then decide which potions to craft. Crafted potions are then offered to adventurers in the market. The alchemist can set the price. Adventureres will but the cheapest potions first. Potion demand fluctuates daily. The game is played over multiple days.
@@ -41,7 +41,9 @@ If any order (buying herbs, crafting potions, listing potions for sale) exceeds 
 - qty must be a positive integer
 - price must be a positive integer
 - total herb cost must not exceed your silver
+- leave out herbs or potions order that have qty 0
 - you must have herbs to craft potions
 - you must have potions to sell them.
+
 
 `;

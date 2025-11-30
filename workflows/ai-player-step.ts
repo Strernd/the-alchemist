@@ -6,51 +6,49 @@ export async function aiPlayerStep(inputs: PlayerInputs, modelId: string) {
   "use step";
 
   const userPrompt = `
-    There are total ${
-      inputs.meta.playCount
-    } players in the game. Today is day ${inputs.meta.currentDay} of ${
-    inputs.meta.totalDays
-  }.
+There are total ${inputs.meta.playCount} players in the game. Today is day ${
+    inputs.meta.currentDay
+  } of ${inputs.meta.totalDays}.
 
-    Your inventory:
-    Silver: ${inputs.inventory.silver}
-    Herbs: ${Object.entries(inputs.inventory.herbs)
-      .map(([herbId, qty]) => `${herbId}: ${qty}`)
-      .join("\n")}
-    Potions: ${Object.entries(inputs.inventory.potions)
-      .map(([potionId, qty]) => `${potionId}: ${qty}`)
-      .join("\n")}
+Your inventory:
+Silver: ${inputs.inventory.silver}
+Herbs: ${Object.entries(inputs.inventory.herbs)
+    .map(([herbId, qty]) => `${herbId}: ${qty}`)
+    .join(", ")}
+Potions: ${Object.entries(inputs.inventory.potions)
+    .map(([potionId, qty]) => `${potionId}: ${qty}`)
+    .join(", ")}
 
-    Daily herb prices:
-    ${Object.entries(inputs.dailyPrices)
-      .map(([herbId, price]) => `${herbId}: ${price}`)
-      .join("\n")}
+Daily herb prices:
+${Object.entries(inputs.dailyPrices)
+  .map(([herbId, price]) => `${herbId}: ${price}`)
+  .join(", ")}
 
-    Historic demands:
-    ${inputs.historicDemands
-      .map(
-        (demands, idx) =>
-          `Day ${idx + 1}: ${Object.entries(demands)
-            .map(
-              ([herbId, demand]) =>
-                `${herbId}: ${demand.fulfilled} fulfilled / ${demand.remaining} remaining (highest price: ${demand.highestPrice}, lowest price: ${demand.lowestPrice})`
-            )
-            .join("\n")}`
-      )
-      .join("\n")}
+Historic demands:
+${inputs.historicDemands
+  .map(
+    (demands, idx) =>
+      `Day ${idx + 1}: ${Object.entries(demands)
+        .map(
+          ([herbId, demand]) =>
+            `${herbId}: ${demand.fulfilled} fulfilled / ${demand.remaining} remaining (highest price: ${demand.highestPrice}, lowest price: ${demand.lowestPrice})`
+        )
+        .join("\n")}`
+  )
+  .join("\n")}
 
-    Yesterday's errors:
-    ${inputs.yesterdaysErrors.join("\n")}
+Yesterday's errors:
+${inputs.yesterdaysErrors.join("\n")}
 
-    Yesterday's executed offers:
-    ${inputs.yesterdaysExecutedOffers
-      .map(
-        (offer) =>
-          `${offer.potionId}: ${offer.actuallySold}/${offer.qty} sold at ${offer.price}`
-      )
-      .join("\n")}
+Yesterday's executed offers:
+${inputs.yesterdaysExecutedOffers
+  .map(
+    (offer) =>
+      `${offer.potionId}: ${offer.actuallySold}/${offer.qty} sold at ${offer.price}`
+  )
+  .join("\n")}
 
-    Select your actions for today.
+Select your actions for today.
     `;
   console.log("Prompting model: ", modelId);
   console.log(userPrompt);
