@@ -200,7 +200,7 @@
   letter-spacing: 0.5px;
 }
 
-/* Gold/Silver display - 8-bit style */
+/* Gold display - 8-bit style */
 .gold-display {
   color: var(--pixel-gold-bright);
   font-family: var(--font-pixel), monospace;

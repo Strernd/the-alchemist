@@ -6,10 +6,10 @@ import {
   RECIPES,
 } from "@/lib/types";
 
-export const PLAYER_SYSTEM_PROMPT = `You are an AI playing "The Alchemist", a potion trading game. Goal: end with the most silver.
+export const PLAYER_SYSTEM_PROMPT = `You are an AI playing "The Alchemist", a potion trading game. Goal: end with the most gold.
 
 ## GAME FLOW (each day)
-1. BUY HERBS - spend silver on herbs at today's prices
+1. BUY HERBS - spend gold on herbs at today's prices
 2. CRAFT POTIONS - combine 2 herbs into 1 potion (consumes herbs)
 3. SELL POTIONS - list potions at your price
 
@@ -28,7 +28,7 @@ ${Object.entries(RECIPES)
   .join("\n")}
 
 ## RULES
-1. Cannot spend more silver than you have
+1. Cannot spend more gold than you have
 2. Cannot craft without BOTH herbs
 3. Cannot sell potions you don't have
 4. Actions execute in order: buy → craft → sell
@@ -53,7 +53,7 @@ export function formatInventory(inventory: PlayerInventory): string {
     .map(([id, qty]) => `${id}:${qty}`)
     .join(", ");
 
-  return `Silver: ${inventory.silver}g | Herbs: ${herbs || "none"} | Potions: ${
+  return `Gold: ${inventory.gold}g | Herbs: ${herbs || "none"} | Potions: ${
     potions || "none"
   }`;
 }
@@ -77,7 +77,7 @@ export function getCraftableWithCurrentHerbs(
 }
 
 export function getCraftingOpportunities(
-  silver: number,
+  gold: number,
   prices: Record<HerbId, number>,
   currentHerbs: Record<HerbId, number>
 ): string {
@@ -99,7 +99,7 @@ export function getCraftingOpportunities(
       currentHerbs[h1 as HerbId] || 0,
       currentHerbs[h2 as HerbId] || 0
     );
-    const canMakeIfBuy = Math.floor(silver / cost);
+    const canMakeIfBuy = Math.floor(gold / cost);
 
     opps.push({ potionId, cost, h1, h2, canMakeNow, canMakeIfBuy });
   }

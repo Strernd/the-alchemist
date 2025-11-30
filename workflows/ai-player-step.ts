@@ -42,7 +42,7 @@ export async function aiPlayerStep(
 
   const craftableNow = getCraftableWithCurrentHerbs(inputs.inventory.herbs);
   const craftingOpps = getCraftingOpportunities(
-    inputs.inventory.silver,
+    inputs.inventory.gold,
     inputs.dailyPrices,
     inputs.inventory.herbs
   );
@@ -54,7 +54,7 @@ export async function aiPlayerStep(
 
   const userPrompt = `Day ${inputs.meta.currentDay}/${
     inputs.meta.totalDays
-  } | ${inputs.meta.playCount} players | ${inputs.inventory.silver}g
+  } | ${inputs.meta.playCount} players | ${inputs.inventory.gold}g
 
 INVENTORY: ${formatInventory(inputs.inventory)}
 

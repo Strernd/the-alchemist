@@ -112,8 +112,11 @@ export async function gameWorkflow(config: GameConfig) {
         cost
       );
 
-      if (!result.success && result.error) {
-        disqualified.push({ playerIdx: idx, reason: result.error });
+      if (!result.success) {
+        disqualified.push({
+          playerIdx: idx,
+          reason: result.error || "Name generation failed",
+        });
       }
     }
     return { ...player, name: result.name };
@@ -238,14 +241,8 @@ export async function gameWorkflow(config: GameConfig) {
 
         // If this step failed, disqualify the player for future rounds
         if (!result.success) {
-          if (result.error) {
-            console.log(
-              `[Game] ⚠ DISQUALIFYING player ${idx}: ${result.error}`
-            );
-            disqualified.push({ playerIdx: idx, reason: result.error });
-          } else {
-            console.log(`[Game] ⚠ Player ${idx} failed but no error message!`);
-          }
+          const reason = result.error || "Unknown error";
+          disqualified.push({ playerIdx: idx, reason });
         }
 
         outputs = result.outputs;

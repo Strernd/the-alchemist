@@ -26,7 +26,11 @@ export function setupGame(config: GenerationConfig): Game {
   const herbDailyPrices = createHerbDailyPrices(config, rng);
   const potionDailyDemands = createPotionDailyDemands(config, rng);
 
-  return { herbDailyPrices, potionDailyDemands };
+  return {
+    herbDailyPrices,
+    potionDailyDemands,
+    herbTierBasePrices: config.herbTierBasePrices,
+  };
 }
 
 export function initializeGameState(config: RuntimeConfig): GameState {
@@ -107,7 +111,8 @@ export function processGameDay(
     } = sanitizePlayerOutputsDetailed(
       cloneDeep(gameState.playerInventories[idx]),
       playerOutput,
-      herbPrices
+      herbPrices,
+      game.herbTierBasePrices
     );
 
     newGameState.lastDayErrorsByPlayer.push(errors);
@@ -146,7 +151,7 @@ export function processGameDay(
           // Add back unsold potions (potions were already removed when creating offers)
           inventory.potions[offer.potionId] += offer.qty - offer.actuallySold!;
           const revenue = offer.price * offer.actuallySold!;
-          inventory.silver += revenue;
+          inventory.gold += revenue;
 
           playerSales.push({
             potionId: offer.potionId,
@@ -180,10 +185,33 @@ export function processGameDay(
   return newGameState;
 }
 
+// Price multiplier for max offer price (5x herb cost)
+const MAX_PRICE_MULTIPLIER = 5;
+
+// Get the tier of a herb
+function getHerbTier(herbId: HerbId): Tier {
+  if (HERB_TIERS.T1.includes(herbId)) return "T1";
+  if (HERB_TIERS.T2.includes(herbId)) return "T2";
+  return "T3";
+}
+
+// Calculate max price for a potion based on its recipe herbs' base prices
+function getMaxPotionPrice(
+  potionId: PotionId,
+  herbTierBasePrices: Record<Tier, number>
+): number {
+  const recipe = RECIPES[potionId];
+  // All herbs in a recipe are same tier, so just get tier from first herb
+  const tier = getHerbTier(recipe[0]);
+  // Max price = multiplier * (2 herbs * base price per herb)
+  return MAX_PRICE_MULTIPLIER * 2 * herbTierBasePrices[tier];
+}
+
 export function sanitizePlayerOutputs(
   playerInventory: PlayerInventory,
   outputs: PlayerOutputs,
-  dailyPrices: Record<HerbId, number>
+  dailyPrices: Record<HerbId, number>,
+  herbTierBasePrices?: Record<Tier, number>
 ): {
   inventory: PlayerInventory;
   errors: string[];
@@ -192,7 +220,8 @@ export function sanitizePlayerOutputs(
   const result = sanitizePlayerOutputsDetailed(
     playerInventory,
     outputs,
-    dailyPrices
+    dailyPrices,
+    herbTierBasePrices
   );
   return {
     inventory: result.inventory,
@@ -204,7 +233,8 @@ export function sanitizePlayerOutputs(
 export function sanitizePlayerOutputsDetailed(
   playerInventory: PlayerInventory,
   outputs: PlayerOutputs,
-  dailyPrices: Record<HerbId, number>
+  dailyPrices: Record<HerbId, number>,
+  herbTierBasePrices?: Record<Tier, number>
 ): {
   inventory: PlayerInventory;
   errors: string[];
@@ -216,14 +246,14 @@ export function sanitizePlayerOutputsDetailed(
   const actualBuyHerbs: { herbId: HerbId; qty: number; cost: number }[] = [];
   const actualMakePotions: { potionId: PotionId; qty: number }[] = [];
 
-  let silver = playerInventory.silver;
+  let gold = playerInventory.gold;
 
   // Buy herbs
   for (const herbOrder of outputs.buyHerbs) {
     const herbPrice = dailyPrices[herbOrder.herbId];
-    const boughtHerbs = Math.min(herbOrder.qty, Math.floor(silver / herbPrice));
+    const boughtHerbs = Math.min(herbOrder.qty, Math.floor(gold / herbPrice));
     const cost = boughtHerbs * herbPrice;
-    silver -= cost;
+    gold -= cost;
     playerInventory.herbs[herbOrder.herbId] += boughtHerbs;
 
     if (boughtHerbs > 0) {
@@ -236,11 +266,11 @@ export function sanitizePlayerOutputsDetailed(
 
     if (boughtHerbs !== herbOrder.qty) {
       errors.push(
-        `Not enough silver to buy ${herbOrder.qty} ${herbOrder.herbId}. Bought ${boughtHerbs} herbs.`
+        `Not enough gold to buy ${herbOrder.qty} ${herbOrder.herbId}. Bought ${boughtHerbs} herbs.`
       );
     }
   }
-  playerInventory.silver = silver;
+  playerInventory.gold = gold;
 
   // Make potions
   for (const potionOrder of outputs.makePotions) {
@@ -275,10 +305,21 @@ export function sanitizePlayerOutputsDetailed(
       potionOffer.qty,
       playerInventory.potions[potionOffer.potionId]
     );
+
+    // Cap price based on base herb costs (5x herb cost) - silent cap by design
+    let finalPrice = potionOffer.price;
+    if (herbTierBasePrices) {
+      const maxPrice = getMaxPotionPrice(
+        potionOffer.potionId,
+        herbTierBasePrices
+      );
+      finalPrice = Math.min(potionOffer.price, maxPrice);
+    }
+
     playerInventory.potions[potionOffer.potionId] -= offeredPotions;
     executableOffers.push({
       potionId: potionOffer.potionId,
-      price: potionOffer.price,
+      price: finalPrice,
       qty: offeredPotions,
     });
     if (offeredPotions !== potionOffer.qty) {
@@ -352,8 +393,8 @@ function processMarket(
     const offers = market[potionId as PotionId] || [];
     const processedOffersForPotion: PotionOffer[] = [];
     let remaining = demand;
+    let lowestPrice = 0;
     let highestPrice = 0;
-    const lowestPrice = offers.length > 0 ? offers[0].price : 0;
 
     // Group offers by price for fair allocation
     let i = 0;
@@ -373,7 +414,10 @@ function processMarket(
         // All offers fully satisfied
         for (const offer of samePriceOffers) {
           processedOffersForPotion.push({ ...offer, actuallySold: offer.qty });
-          if (offer.qty > 0) highestPrice = currentPrice;
+          if (offer.qty > 0) {
+            if (lowestPrice === 0) lowestPrice = currentPrice;
+            highestPrice = currentPrice;
+          }
         }
         remaining -= totalQtyAtPrice;
       } else {
@@ -381,7 +425,10 @@ function processMarket(
         const allocated = allocateEvenSplit(samePriceOffers, remaining);
         for (const { offer, sold } of allocated) {
           processedOffersForPotion.push({ ...offer, actuallySold: sold });
-          if (sold > 0) highestPrice = offer.price;
+          if (sold > 0) {
+            if (lowestPrice === 0) lowestPrice = offer.price;
+            highestPrice = offer.price;
+          }
         }
         remaining = 0;
       }
@@ -433,7 +480,7 @@ function initializePlayerInventory(config: RuntimeConfig): PlayerInventory {
       acc[potion as PotionId] = 0;
       return acc;
     }, {} as Record<PotionId, number>),
-    silver: config.startingSilver,
+    gold: config.startingGold,
   };
 }
 

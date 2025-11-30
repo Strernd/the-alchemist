@@ -29,7 +29,7 @@ const baseConfig: GameConfig = {
   },
   runtime: {
     players: [{ name: "p1", model: "model-1" }],
-    startingSilver: 100,
+    startingGold: 100,
   },
 };
 
@@ -106,6 +106,7 @@ const mockGame: Game = {
       P18: 2,
     },
   ],
+  herbTierBasePrices: { T1: 10, T2: 20, T3: 30 },
 };
 
 describe("game engine", () => {
@@ -130,7 +131,7 @@ describe("game engine", () => {
     expect(state.currentDay).toBe(1);
     expect(state.playerInventories).toHaveLength(config.runtime.players.length);
     state.playerInventories.forEach((inv) => {
-      expect(inv.silver).toBe(config.runtime.startingSilver);
+      expect(inv.gold).toBe(config.runtime.startingGold);
       expect(Object.values(inv.herbs).every((qty) => qty === 0)).toBe(true);
       expect(Object.values(inv.potions).every((qty) => qty === 0)).toBe(true);
     });
@@ -209,14 +210,14 @@ describe("game engine", () => {
     const priceH01 = dailyPrices.H01;
     const expectedBought = Math.min(
       outputs.buyHerbs[0].qty,
-      Math.floor(config.runtime.startingSilver / priceH01)
+      Math.floor(config.runtime.startingGold / priceH01)
     );
 
     const result = sanitizePlayerOutputs(inventory, outputs, dailyPrices);
 
     expect(result.inventory.herbs.H01).toBe(expectedBought);
-    expect(result.inventory.silver).toBe(
-      config.runtime.startingSilver - expectedBought * priceH01
+    expect(result.inventory.gold).toBe(
+      config.runtime.startingGold - expectedBought * priceH01
     );
     expect(result.inventory.potions.P01).toBe(0);
     expect(result.errors.some((err) => err.includes("Not enough herbs"))).toBe(
@@ -293,7 +294,7 @@ describe("game engine", () => {
     expect(state.processedMarketByDay).toHaveLength(
       deterministicConfig.generation.days
     );
-    expect(state.playerInventories[0].silver).toBe(70); // 100 - 40 herbs + 10 silver from selling 1 potion (demand=1)
+    expect(state.playerInventories[0].gold).toBe(70); // 100 - 40 herbs + 10 gold from selling 1 potion (demand=1)
     expect(state.lastDayErrorsByPlayer[0]).toBeDefined();
   });
 
@@ -314,9 +315,9 @@ describe("game engine", () => {
     state = processGameDay(outputs, state, mockGame); // Demand for P01 is 1
 
     // Should have: 5 - 3 offered + 2 unsold returned = 4 potions
-    // Silver: 100 + 10 (1 sold @ 10) = 110
+    // Gold: 100 + 10 (1 sold @ 10) = 110
     expect(state.playerInventories[0].potions.P01).toBe(4);
-    expect(state.playerInventories[0].silver).toBe(110);
+    expect(state.playerInventories[0].gold).toBe(110);
   });
 
   it("never allows potion inventory to go negative", () => {

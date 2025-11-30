@@ -121,9 +121,9 @@ export default function GameView({
         }
       }
 
-      const currentSilver = latestState.playerInventories[idx]?.silver || 0;
-      const startingSilver = dayStates[0]?.playerInventories[idx]?.silver || 1000;
-      const profitLoss = currentSilver - startingSilver;
+      const currentGold = latestState.playerInventories[idx]?.gold || 0;
+      const startingGold = dayStates[0]?.playerInventories[idx]?.gold || 1000;
+      const profitLoss = currentGold - startingGold;
 
       // Get usage stats from latest state
       const usageStats = latestState.playerUsageStats?.[idx];
@@ -131,7 +131,7 @@ export default function GameView({
       return {
         player,
         playerIdx: idx,
-        silver: currentSilver,
+        gold: currentGold,
         profitLoss,
         herbsBought: totalHerbsBought,
         herbCost: totalHerbCost,
@@ -149,7 +149,7 @@ export default function GameView({
         totalTimeMs: usageStats?.totalTimeMs || 0,
         callCount: usageStats?.callCount || 0,
       };
-    }).sort((a, b) => b.silver - a.silver);
+    }).sort((a, b) => b.gold - a.gold);
   }, [dayStates, latestState, players]);
 
   // Calculate final rankings for current day view
@@ -158,10 +158,10 @@ export default function GameView({
     return currentState.playerInventories
       .map((inv, idx) => ({
         playerIdx: idx,
-        silver: inv.silver,
+        gold: inv.gold,
         player: players[idx],
       }))
-      .sort((a, b) => b.silver - a.silver);
+      .sort((a, b) => b.gold - a.gold);
   }, [currentState, players]);
 
   // Winner is from the FINAL state, not the currently viewed day
@@ -170,8 +170,8 @@ export default function GameView({
   const finalWinner = useMemo(() => {
     if (!isCompleted || !latestState) return null;
     const finalRankings = latestState.playerInventories
-      .map((inv, idx) => ({ playerIdx: idx, silver: inv.silver, player: players[idx] }))
-      .sort((a, b) => b.silver - a.silver);
+      .map((inv, idx) => ({ playerIdx: idx, gold: inv.gold, player: players[idx] }))
+      .sort((a, b) => b.gold - a.gold);
     return finalRankings[0];
   }, [isCompleted, latestState, players]);
 
@@ -280,7 +280,7 @@ export default function GameView({
           <span className="pixel-title">{finalWinner.player.name} WINS!</span>
           <span className="text-2xl ml-2">🏆</span>
           <p className="pixel-text-sm text-[var(--pixel-text-dim)] mt-1">
-            Final: <span className="gold-display">{finalWinner.silver}</span> silver
+            Final: <span className="gold-display">{finalWinner.gold}</span> gold
           </p>
         </div>
       )}
@@ -340,7 +340,7 @@ function OverviewView({
   playerStats: {
     player: Player;
     playerIdx: number;
-    silver: number;
+    gold: number;
     profitLoss: number;
     herbsBought: number;
     herbCost: number;
@@ -431,7 +431,7 @@ function OverviewView({
                 <div className="pixel-text-sm text-[var(--pixel-text-dim)] truncate">{stats.player.model.split("/").pop()}</div>
               </div>
               <div className="text-right">
-                <div className="gold-display text-lg">{stats.silver}g</div>
+                <div className="gold-display text-lg">{stats.gold}g</div>
                 <div className={`pixel-text-sm ${stats.profitLoss >= 0 ? "text-[var(--pixel-green-bright)]" : "text-[var(--pixel-red)]"}`}>
                   {stats.profitLoss >= 0 ? "+" : ""}{stats.profitLoss}
                 </div>
@@ -512,7 +512,7 @@ function DetailsView({
 }: {
   dayStates: GameState[];
   players: Player[];
-  rankings: { playerIdx: number; silver: number; player: Player }[];
+  rankings: { playerIdx: number; gold: number; player: Player }[];
   selectedDay: number;
   setSelectedDay: (d: number | ((d: number) => number)) => void;
   selectedPlayerIdx: number;
@@ -601,7 +601,7 @@ function DetailsView({
                     <span className={`pixel-text-sm flex-1 truncate player-color-${rank.playerIdx}`}>
                       {rank.player.name}
                     </span>
-                    <span className="gold-display text-sm">{rank.silver}</span>
+                    <span className="gold-display text-sm">{rank.gold}</span>
                   </div>
                 </div>
               ))}
@@ -683,7 +683,7 @@ function PlayerDayView({
   playerIdx: number;
   actions: PlayerDayActions;
 }) {
-  const profitLoss = actions.endInventory.silver - actions.startInventory.silver;
+  const profitLoss = actions.endInventory.gold - actions.startInventory.gold;
 
   return (
     <div className={`pixel-frame p-4 player-bg-${playerIdx}`} style={{ borderColor: `var(--player-${playerIdx + 1})` }}>
@@ -725,9 +725,9 @@ function PlayerDayView({
           ) : (
             <p className="pixel-text-sm text-[var(--pixel-text-dim)]">No herbs purchased</p>
           )}
-          {actions.errors.filter(e => e.includes("silver") || e.includes("buy")).length > 0 && (
+          {actions.errors.filter(e => e.includes("gold") || e.includes("buy")).length > 0 && (
             <div className="mt-2 text-[var(--pixel-red)] pixel-text-sm">
-              {actions.errors.filter(e => e.includes("silver") || e.includes("buy")).map((e, i) => (
+              {actions.errors.filter(e => e.includes("gold") || e.includes("buy")).map((e, i) => (
                 <p key={i}>⚠ {e}</p>
               ))}
             </div>
@@ -894,7 +894,7 @@ function InventoryPanel({
   profitLoss,
 }: {
   title: string;
-  inventory: { silver: number; herbs: Record<HerbId, number>; potions: Record<PotionId, number> };
+  inventory: { gold: number; herbs: Record<HerbId, number>; potions: Record<PotionId, number> };
   profitLoss?: number;
 }) {
   const herbsWithQty = Object.entries(inventory.herbs).filter(([, qty]) => qty > 0);
@@ -906,10 +906,10 @@ function InventoryPanel({
     <div className="pixel-frame p-3">
       <h3 className="pixel-text-sm text-[var(--pixel-gold)] mb-2">{title}</h3>
       
-      {/* Silver */}
+      {/* Gold */}
       <div className="flex justify-between pixel-text-sm mb-2">
-        <span>💰 Silver</span>
-        <span className="gold-display">{inventory.silver}</span>
+        <span>💰 Gold</span>
+        <span className="gold-display">{inventory.gold}</span>
       </div>
       
       {/* Profit/Loss if provided */}

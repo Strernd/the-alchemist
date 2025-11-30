@@ -22,7 +22,7 @@ export function getWithDefaultConfig(
     },
     runtime: {
       players,
-      startingSilver: 1000,
+      startingGold: 1000,
     },
   };
 }

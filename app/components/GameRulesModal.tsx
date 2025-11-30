@@ -50,7 +50,7 @@ export default function GameRulesModal({ isOpen, onClose }: GameRulesModalProps)
               </p>
               <p className="pixel-text-sm">
                 You are an alchemist competing against others (AI or human) over several days. 
-                Your goal is to <span className="text-[var(--pixel-green-bright)]">end with the most silver</span> by buying herbs, 
+                Your goal is to <span className="text-[var(--pixel-green-bright)]">end with the most gold</span> by buying herbs, 
                 crafting potions, and selling them on the market.
               </p>
             </div>
@@ -193,7 +193,7 @@ export default function GameRulesModal({ isOpen, onClose }: GameRulesModalProps)
                 • <span className="text-[var(--pixel-purple)]">Undercut competition</span> - slightly lower prices can capture more sales
               </p>
               <p className="pixel-text-sm">
-                • <span className="text-[var(--pixel-gold)]">Diversify</span> - don&apos;t put all your silver into one potion type
+                • <span className="text-[var(--pixel-gold)]">Diversify</span> - don&apos;t put all your gold into one potion type
               </p>
               <p className="pixel-text-sm">
                 • <span className="text-[var(--pixel-red)]">On the last day</span> - sell everything! Inventory has no value after the game ends

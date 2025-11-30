@@ -65,14 +65,14 @@ export default function HumanPlayerUI({
   const projectedInventory = useMemo(() => {
     const herbs = { ...inventory.herbs };
     const potions = { ...inventory.potions };
-    let silver = inventory.silver;
+    let gold = inventory.gold;
 
     // Apply herb buys
     Object.entries(herbBuys).forEach(([herbId, qty]) => {
       if (qty > 0) {
         const cost = herbPrices[herbId as HerbId] * qty;
         herbs[herbId as HerbId] = (herbs[herbId as HerbId] || 0) + qty;
-        silver -= cost;
+        gold -= cost;
       }
     });
 
@@ -87,7 +87,7 @@ export default function HumanPlayerUI({
       }
     });
 
-    return { herbs, potions, silver };
+    return { herbs, potions, gold };
   }, [inventory, herbBuys, potionCrafts, herbPrices]);
 
   // Calculate total cost of herb buys
@@ -267,20 +267,20 @@ export default function HumanPlayerUI({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* LEFT COLUMN: Inventory & Herb Shop */}
         <div className="space-y-4">
-          {/* Current Silver */}
+          {/* Current Gold */}
           <div className="pixel-frame p-4">
-            <h2 className="pixel-heading text-center mb-3">💰 SILVER</h2>
+            <h2 className="pixel-heading text-center mb-3">💰 GOLD</h2>
             <div className="text-center">
-              <span className="pixel-title text-2xl gold-display">{inventory.silver}</span>
+              <span className="pixel-title text-2xl gold-display">{inventory.gold}</span>
               {totalHerbCost > 0 && (
                 <span className="pixel-text text-[var(--pixel-red)] ml-2">
                   (-{totalHerbCost})
                 </span>
               )}
             </div>
-            {projectedInventory.silver < 0 && (
+            {projectedInventory.gold < 0 && (
               <p className="pixel-text-sm text-[var(--pixel-red)] text-center mt-2">
-                ⚠ Not enough silver!
+                ⚠ Not enough gold!
               </p>
             )}
           </div>
@@ -332,7 +332,7 @@ export default function HumanPlayerUI({
                             />
                             <button
                               onClick={() => setHerbBuy(herbId, buying + 1)}
-                              disabled={projectedInventory.silver - price < 0}
+                              disabled={projectedInventory.gold - price < 0}
                               className="pixel-btn px-3 py-2"
                             >
                               +
@@ -694,7 +694,7 @@ export default function HumanPlayerUI({
           </div>
           <button
             onClick={handleSubmit}
-            disabled={isSubmitting || projectedInventory.silver < 0}
+            disabled={isSubmitting || projectedInventory.gold < 0}
             className="pixel-btn pixel-btn-primary px-8 py-3"
           >
             {isSubmitting ? "SUBMITTING..." : "✓ END TURN"}

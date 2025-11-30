@@ -14,7 +14,7 @@ export type GenerationConfig = {
 
 export type RuntimeConfig = {
   players: Player[];
-  startingSilver: number;
+  startingGold: number;
 };
 
 export type GameConfig = {
@@ -25,7 +25,7 @@ export type GameConfig = {
 export type PlayerInventory = {
   herbs: Record<HerbId, number>;
   potions: Record<PotionId, number>;
-  silver: number;
+  gold: number;
 };
 
 export type Player = {
@@ -37,6 +37,7 @@ export type Player = {
 export type Game = {
   herbDailyPrices: Record<HerbId, number>[];
   potionDailyDemands: Record<PotionId, number>[];
+  herbTierBasePrices: Record<Tier, number>; // Used for price capping
 };
 
 // Detailed record of what happened in a day for each player
