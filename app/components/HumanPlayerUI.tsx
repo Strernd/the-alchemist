@@ -1,18 +1,18 @@
 "use client";
 
+import { parseErrorString } from "@/lib/format-utils";
 import {
-  HerbId,
   HERB_NAMES,
+  HerbId,
   PlayerInputs,
   PlayerOutputs,
-  PotionId,
   POTION_NAMES,
   POTION_TIER_LOOKUP,
+  PotionId,
   RECIPES,
   Tier,
 } from "@/lib/types";
-import { parseErrorString } from "@/lib/format-utils";
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import GameRulesModal from "./GameRulesModal";
 
 interface HumanPlayerUIProps {
@@ -25,7 +25,12 @@ interface HumanPlayerUIProps {
 
 type HerbBuy = { herbId: HerbId; qty: number };
 type PotionCraft = { potionId: PotionId; qty: number };
-type OfferEntry = { id: string; potionId: PotionId; qty: number; price: number };
+type OfferEntry = {
+  id: string;
+  potionId: PotionId;
+  qty: number;
+  price: number;
+};
 
 // CSS to hide number input spinners
 const inputStyle = `
@@ -49,8 +54,12 @@ export default function HumanPlayerUI({
   isSubmitting,
 }: HumanPlayerUIProps) {
   // State for player actions
-  const [herbBuys, setHerbBuys] = useState<Record<HerbId, number>>({} as Record<HerbId, number>);
-  const [potionCrafts, setPotionCrafts] = useState<Record<PotionId, number>>({} as Record<PotionId, number>);
+  const [herbBuys, setHerbBuys] = useState<Record<HerbId, number>>(
+    {} as Record<HerbId, number>
+  );
+  const [potionCrafts, setPotionCrafts] = useState<Record<PotionId, number>>(
+    {} as Record<PotionId, number>
+  );
   // Multiple offers support - list of offers with unique IDs
   const [offers, setOffers] = useState<OfferEntry[]>([]);
   // Pixel-style potion picker
@@ -84,7 +93,8 @@ export default function HumanPlayerUI({
         recipe.forEach((herbId) => {
           herbs[herbId] = (herbs[herbId] || 0) - qty;
         });
-        potions[potionId as PotionId] = (potions[potionId as PotionId] || 0) + qty;
+        potions[potionId as PotionId] =
+          (potions[potionId as PotionId] || 0) + qty;
       }
     });
 
@@ -104,7 +114,10 @@ export default function HumanPlayerUI({
     const currentCraftQty = potionCrafts[potionId] || 0;
 
     return recipe.every((herbId) => {
-      const availableAfterCurrent = (inventory.herbs[herbId] || 0) + (herbBuys[herbId] || 0) - currentCraftQty;
+      const availableAfterCurrent =
+        (inventory.herbs[herbId] || 0) +
+        (herbBuys[herbId] || 0) -
+        currentCraftQty;
       return availableAfterCurrent >= 1;
     });
   };
@@ -114,7 +127,8 @@ export default function HumanPlayerUI({
     const recipe = RECIPES[potionId];
     const herbsAfterBuys: Record<HerbId, number> = { ...inventory.herbs };
     Object.entries(herbBuys).forEach(([herbId, qty]) => {
-      herbsAfterBuys[herbId as HerbId] = (herbsAfterBuys[herbId as HerbId] || 0) + qty;
+      herbsAfterBuys[herbId as HerbId] =
+        (herbsAfterBuys[herbId as HerbId] || 0) + qty;
     });
 
     // Subtract herbs used by ALL crafts (including this potion)
@@ -128,7 +142,9 @@ export default function HumanPlayerUI({
 
     // Max is current crafted + remaining available herbs
     const currentCrafted = potionCrafts[potionId] || 0;
-    const remainingHerbs = Math.min(...recipe.map((herbId) => Math.max(0, herbsAfterBuys[herbId] || 0)));
+    const remainingHerbs = Math.min(
+      ...recipe.map((herbId) => Math.max(0, herbsAfterBuys[herbId] || 0))
+    );
     return currentCrafted + remainingHerbs;
   };
 
@@ -140,12 +156,16 @@ export default function HumanPlayerUI({
   // Handle potion craft change
   const setPotionCraft = (potionId: PotionId, qty: number) => {
     const max = maxCraftable(potionId);
-    setPotionCrafts((prev) => ({ ...prev, [potionId]: Math.max(0, Math.min(qty, max)) }));
+    setPotionCrafts((prev) => ({
+      ...prev,
+      [potionId]: Math.max(0, Math.min(qty, max)),
+    }));
   };
 
   // Get available potions for offers (current inventory + crafted - already offered)
   const getAvailableForOffer = (potionId: PotionId): number => {
-    const total = (inventory.potions[potionId] || 0) + (potionCrafts[potionId] || 0);
+    const total =
+      (inventory.potions[potionId] || 0) + (potionCrafts[potionId] || 0);
     const alreadyOffered = offers
       .filter((o) => o.potionId === potionId)
       .reduce((sum, o) => sum + o.qty, 0);
@@ -164,15 +184,22 @@ export default function HumanPlayerUI({
   };
 
   // Update an existing offer
-  const updateOffer = (id: string, updates: { qty?: number; price?: number }) => {
+  const updateOffer = (
+    id: string,
+    updates: { qty?: number; price?: number }
+  ) => {
     setOffers((prev) =>
       prev.map((o) => {
         if (o.id !== id) return o;
         const available = getAvailableForOffer(o.potionId) + o.qty; // Add back current qty
         return {
           ...o,
-          qty: updates.qty !== undefined ? Math.min(Math.max(0, updates.qty), available) : o.qty,
-          price: updates.price !== undefined ? Math.max(1, updates.price) : o.price,
+          qty:
+            updates.qty !== undefined
+              ? Math.min(Math.max(0, updates.qty), available)
+              : o.qty,
+          price:
+            updates.price !== undefined ? Math.max(1, updates.price) : o.price,
         };
       })
     );
@@ -184,9 +211,16 @@ export default function HumanPlayerUI({
     if (!original) return;
     const available = getAvailableForOffer(original.potionId);
     if (available <= 0) return;
+    // Copy both price AND quantity (capped to available)
+    const copyQty = Math.min(original.qty, available);
     setOffers((prev) => [
       ...prev,
-      { id: `${original.potionId}-${Date.now()}`, potionId: original.potionId, qty: 1, price: original.price },
+      {
+        id: `${original.potionId}-${Date.now()}`,
+        potionId: original.potionId,
+        qty: copyQty,
+        price: original.price,
+      },
     ]);
   };
 
@@ -231,21 +265,24 @@ export default function HumanPlayerUI({
 
   const getTierColor = (tier: Tier) => {
     switch (tier) {
-      case "T1": return "text-[var(--pixel-green-bright)]";
-      case "T2": return "text-[var(--pixel-blue-bright)]";
-      case "T3": return "text-[var(--pixel-purple-bright)]";
+      case "T1":
+        return "text-[var(--pixel-green-bright)]";
+      case "T2":
+        return "text-[var(--pixel-blue-bright)]";
+      case "T3":
+        return "text-[var(--pixel-purple-bright)]";
     }
   };
 
   // Get potions that can be offered
-  const availablePotionsForNewOffer = (Object.keys(RECIPES) as PotionId[]).filter(
-    (potionId) => getAvailableForOffer(potionId) > 0
-  );
+  const availablePotionsForNewOffer = (
+    Object.keys(RECIPES) as PotionId[]
+  ).filter((potionId) => getAvailableForOffer(potionId) > 0);
 
   return (
     <div className="min-h-screen p-4">
       <style>{inputStyle}</style>
-      
+
       {/* Header */}
       <div className="pixel-frame-gold p-4 mb-4">
         <div className="flex items-center justify-between">
@@ -275,7 +312,9 @@ export default function HumanPlayerUI({
           <div className="pixel-frame p-4">
             <h2 className="pixel-heading text-center mb-3">💰 GOLD</h2>
             <div className="text-center">
-              <span className="pixel-title text-2xl gold-display">{inventory.gold}</span>
+              <span className="pixel-title text-2xl gold-display">
+                {inventory.gold}
+              </span>
               {totalHerbCost > 0 && (
                 <span className="pixel-text text-[var(--pixel-red)] ml-2">
                   (-{totalHerbCost})
@@ -310,7 +349,10 @@ export default function HumanPlayerUI({
                     return (
                       <div key={herbId} className="pixel-frame p-2">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="pixel-text-sm font-bold" title={herbId}>
+                          <span
+                            className="pixel-text-sm font-bold"
+                            title={herbId}
+                          >
                             {HERB_NAMES[herbId]}
                           </span>
                           <span className="pixel-text-sm text-[var(--pixel-text-dim)]">
@@ -318,10 +360,17 @@ export default function HumanPlayerUI({
                           </span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="gold-display text-lg">{price}💰</span>
+                          <span className="gold-display text-lg">
+                            {price}💰
+                          </span>
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={(e) => setHerbBuy(herbId, buying - (e.shiftKey ? 10 : 1))}
+                              onClick={(e) =>
+                                setHerbBuy(
+                                  herbId,
+                                  buying - (e.shiftKey ? 10 : 1)
+                                )
+                              }
                               disabled={buying <= 0}
                               className="pixel-btn px-3 py-2"
                               title="Click: -1, Shift+Click: -10"
@@ -331,12 +380,22 @@ export default function HumanPlayerUI({
                             <input
                               type="number"
                               value={buying}
-                              onChange={(e) => setHerbBuy(herbId, parseInt(e.target.value) || 0)}
-                              className="pixel-input w-16 h-10 text-center text-lg no-spinner"
+                              onChange={(e) =>
+                                setHerbBuy(
+                                  herbId,
+                                  parseInt(e.target.value) || 0
+                                )
+                              }
+                              className="pixel-input w-20 h-12 text-center text-xl font-bold no-spinner"
                               min={0}
                             />
                             <button
-                              onClick={(e) => setHerbBuy(herbId, buying + (e.shiftKey ? 10 : 1))}
+                              onClick={(e) =>
+                                setHerbBuy(
+                                  herbId,
+                                  buying + (e.shiftKey ? 10 : 1)
+                                )
+                              }
                               disabled={projectedInventory.gold - price < 0}
                               className="pixel-btn px-3 py-2"
                               title="Click: +1, Shift+Click: +10"
@@ -357,7 +416,9 @@ export default function HumanPlayerUI({
         {/* MIDDLE COLUMN: Recipes & Crafting */}
         <div className="space-y-4">
           <div className="pixel-frame p-4">
-            <h2 className="pixel-heading text-center mb-3">📜 RECIPES & CRAFTING</h2>
+            <h2 className="pixel-heading text-center mb-3">
+              📜 RECIPES & CRAFTING
+            </h2>
             <p className="pixel-text-sm text-[var(--pixel-text-dim)] text-center mb-3">
               Each potion requires 1 of each listed herb
             </p>
@@ -377,10 +438,15 @@ export default function HumanPlayerUI({
                     return (
                       <div
                         key={potionId}
-                        className={`pixel-frame p-3 ${!canMake && crafting === 0 ? "opacity-50" : ""}`}
+                        className={`pixel-frame p-3 ${
+                          !canMake && crafting === 0 ? "opacity-50" : ""
+                        }`}
                       >
                         <div className="flex items-center justify-between mb-2">
-                          <span className="pixel-text-sm font-bold" title={potionId}>
+                          <span
+                            className="pixel-text-sm font-bold"
+                            title={potionId}
+                          >
                             {POTION_NAMES[potionId]}
                           </span>
                           <span className="pixel-text-sm text-[var(--pixel-text-dim)]">
@@ -393,16 +459,28 @@ export default function HumanPlayerUI({
                           </span>
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={(e) => setPotionCraft(potionId, crafting - (e.shiftKey ? 10 : 1))}
+                              onClick={(e) =>
+                                setPotionCraft(
+                                  potionId,
+                                  crafting - (e.shiftKey ? 10 : 1)
+                                )
+                              }
                               disabled={crafting <= 0}
                               className="pixel-btn px-3 py-2"
                               title="Click: -1, Shift+Click: -10"
                             >
                               −
                             </button>
-                            <span className="pixel-text w-10 text-center text-lg">{crafting}</span>
+                            <span className="pixel-text w-12 text-center text-xl font-bold">
+                              {crafting}
+                            </span>
                             <button
-                              onClick={(e) => setPotionCraft(potionId, crafting + (e.shiftKey ? 10 : 1))}
+                              onClick={(e) =>
+                                setPotionCraft(
+                                  potionId,
+                                  crafting + (e.shiftKey ? 10 : 1)
+                                )
+                              }
                               disabled={!canMake}
                               className="pixel-btn px-3 py-2"
                               title="Click: +1, Shift+Click: +10"
@@ -426,19 +504,25 @@ export default function HumanPlayerUI({
           <div className="flex gap-1">
             <button
               onClick={() => setRightTab("offers")}
-              className={`pixel-btn flex-1 text-xs ${rightTab === "offers" ? "pixel-btn-primary" : ""}`}
+              className={`pixel-btn flex-1 text-xs ${
+                rightTab === "offers" ? "pixel-btn-primary" : ""
+              }`}
             >
               🏪 OFFERS
             </button>
             <button
               onClick={() => setRightTab("history")}
-              className={`pixel-btn flex-1 text-xs ${rightTab === "history" ? "pixel-btn-primary" : ""}`}
+              className={`pixel-btn flex-1 text-xs ${
+                rightTab === "history" ? "pixel-btn-primary" : ""
+              }`}
             >
               📊 HISTORY
             </button>
             <button
               onClick={() => setRightTab("inventory")}
-              className={`pixel-btn flex-1 text-xs ${rightTab === "inventory" ? "pixel-btn-primary" : ""}`}
+              className={`pixel-btn flex-1 text-xs ${
+                rightTab === "inventory" ? "pixel-btn-primary" : ""
+              }`}
             >
               📦 ITEMS
             </button>
@@ -448,7 +532,10 @@ export default function HumanPlayerUI({
           {rightTab === "offers" && (
             <div className="pixel-frame p-4">
               <h2 className="pixel-heading text-center mb-3">🏪 YOUR OFFERS</h2>
-              
+              <p className="pixel-text-sm text-[var(--pixel-text-dim)] text-center mb-3">
+                💡 Price cap: 5× base herb cost. Higher prices sell at the cap.
+              </p>
+
               {/* Pixel-style Add Offer Button */}
               {availablePotionsForNewOffer.length > 0 && (
                 <div className="mb-4 relative">
@@ -458,7 +545,7 @@ export default function HumanPlayerUI({
                   >
                     + ADD NEW OFFER
                   </button>
-                  
+
                   {/* Potion Picker Dropdown */}
                   {showPotionPicker && (
                     <div className="absolute top-full left-0 right-0 z-50 mt-1 pixel-frame bg-[var(--pixel-dark)] max-h-64 overflow-y-auto">
@@ -469,7 +556,11 @@ export default function HumanPlayerUI({
                         if (potionsInTier.length === 0) return null;
                         return (
                           <div key={tier}>
-                            <div className={`px-3 py-2 ${getTierColor(tier)} pixel-text-sm border-b border-[var(--pixel-border)]`}>
+                            <div
+                              className={`px-3 py-2 ${getTierColor(
+                                tier
+                              )} pixel-text-sm border-b border-[var(--pixel-border)]`}
+                            >
                               TIER {tier.slice(1)}
                             </div>
                             {potionsInTier.map((potionId) => (
@@ -502,12 +593,17 @@ export default function HumanPlayerUI({
               <div className="space-y-3">
                 {offers.map((offer) => {
                   const tier = POTION_TIER_LOOKUP[offer.potionId];
-                  const maxQty = getAvailableForOffer(offer.potionId) + offer.qty;
+                  const maxQty =
+                    getAvailableForOffer(offer.potionId) + offer.qty;
 
                   return (
                     <div key={offer.id} className="pixel-frame p-3">
                       <div className="flex items-center justify-between mb-2">
-                        <span className={`pixel-text-sm font-bold ${getTierColor(tier)}`}>
+                        <span
+                          className={`pixel-text-sm font-bold ${getTierColor(
+                            tier
+                          )}`}
+                        >
                           {POTION_NAMES[offer.potionId]}
                         </span>
                         <div className="flex gap-1">
@@ -534,20 +630,30 @@ export default function HumanPlayerUI({
                           <input
                             type="number"
                             value={offer.qty}
-                            onChange={(e) => updateOffer(offer.id, { qty: parseInt(e.target.value) || 0 })}
-                            className="pixel-input w-16 h-10 text-center text-lg no-spinner"
+                            onChange={(e) =>
+                              updateOffer(offer.id, {
+                                qty: parseInt(e.target.value) || 0,
+                              })
+                            }
+                            className="pixel-input w-20 h-12 text-center text-xl font-bold no-spinner"
                             min={0}
                             max={maxQty}
                           />
-                          <span className="pixel-text-sm text-[var(--pixel-text-dim)]">/{maxQty}</span>
+                          <span className="pixel-text-sm text-[var(--pixel-text-dim)]">
+                            /{maxQty}
+                          </span>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="pixel-text-sm">💰</span>
                           <input
                             type="number"
                             value={offer.price}
-                            onChange={(e) => updateOffer(offer.id, { price: parseInt(e.target.value) || 1 })}
-                            className="pixel-input w-20 h-10 text-center text-lg no-spinner"
+                            onChange={(e) =>
+                              updateOffer(offer.id, {
+                                price: parseInt(e.target.value) || 1,
+                              })
+                            }
+                            className="pixel-input w-24 h-12 text-center text-xl font-bold no-spinner"
                             min={1}
                           />
                         </div>
@@ -558,7 +664,7 @@ export default function HumanPlayerUI({
                 {offers.length === 0 && (
                   <p className="pixel-text-sm text-[var(--pixel-text-dim)] text-center py-8">
                     {availablePotionsForNewOffer.length > 0
-                      ? "Click \"+ ADD NEW OFFER\" to sell your potions!"
+                      ? 'Click "+ ADD NEW OFFER" to sell your potions!'
                       : "Craft potions to sell them!"}
                   </p>
                 )}
@@ -569,31 +675,45 @@ export default function HumanPlayerUI({
           {/* HISTORY TAB */}
           {rightTab === "history" && (
             <div className="pixel-frame p-4 max-h-[calc(100vh-280px)] overflow-y-auto">
-              <h2 className="pixel-heading text-center mb-3">📊 HISTORY & INTEL</h2>
-              
+              <h2 className="pixel-heading text-center mb-3">
+                📊 HISTORY & INTEL
+              </h2>
+
               {/* HERB PRICE TRENDS */}
               <div className="mb-4">
                 <h3 className="pixel-text-sm text-[var(--pixel-gold)] mb-2 border-b border-[var(--pixel-border)] pb-1">
                   🌿 HERB PRICE TRENDS
                 </h3>
                 <p className="pixel-text-sm text-[var(--pixel-text-dim)] mb-2">
-                  {playerInputs.actionHistory.length > 0 
+                  {playerInputs.actionHistory.length > 0
                     ? `Past ${playerInputs.actionHistory.length} days → Today`
                     : "Today's prices (Day 1)"}
                 </p>
                 <div className="space-y-1">
                   {(["T1", "T2", "T3"] as Tier[]).map((tier) => (
                     <div key={tier}>
-                      <div className={`pixel-text-sm ${getTierColor(tier)} mb-1`}>TIER {tier.slice(1)}</div>
+                      <div
+                        className={`pixel-text-sm ${getTierColor(tier)} mb-1`}
+                      >
+                        TIER {tier.slice(1)}
+                      </div>
                       {herbsByTier[tier].map((herbId) => {
-                        const pastPrices = playerInputs.actionHistory.map((d) => d.herbPrices[herbId]);
+                        const pastPrices = playerInputs.actionHistory.map(
+                          (d) => d.herbPrices[herbId]
+                        );
                         const currentPrice = herbPrices[herbId];
-                        const priceStr = pastPrices.length > 0
-                          ? `${pastPrices.join(" → ")} → ${currentPrice}`
-                          : `${currentPrice}`;
+                        const priceStr =
+                          pastPrices.length > 0
+                            ? `${pastPrices.join(" → ")} → ${currentPrice}`
+                            : `${currentPrice}`;
                         return (
-                          <div key={herbId} className="flex justify-between pixel-text-sm">
-                            <span className="text-[var(--pixel-text-dim)]">{HERB_NAMES[herbId]}</span>
+                          <div
+                            key={herbId}
+                            className="flex justify-between pixel-text-sm"
+                          >
+                            <span className="text-[var(--pixel-text-dim)]">
+                              {HERB_NAMES[herbId]}
+                            </span>
                             <span className="gold-display">{priceStr}g</span>
                           </div>
                         );
@@ -615,24 +735,47 @@ export default function HumanPlayerUI({
                       return (
                         <div key={day.day} className="pixel-frame p-2">
                           <div className="flex justify-between items-center mb-1">
-                            <span className="pixel-text-sm font-bold">Day {day.day}</span>
-                            <span className={`pixel-text-sm ${goldChange >= 0 ? "text-[var(--pixel-green-bright)]" : "text-[var(--pixel-red)]"}`}>
-                              {day.goldStart}g → {day.goldEnd}g ({goldChange >= 0 ? "+" : ""}{goldChange})
+                            <span className="pixel-text-sm font-bold">
+                              Day {day.day}
+                            </span>
+                            <span
+                              className={`pixel-text-sm ${
+                                goldChange >= 0
+                                  ? "text-[var(--pixel-green-bright)]"
+                                  : "text-[var(--pixel-red)]"
+                              }`}
+                            >
+                              {day.goldStart}g → {day.goldEnd}g (
+                              {goldChange >= 0 ? "+" : ""}
+                              {goldChange})
                             </span>
                           </div>
                           {day.herbsBought.length > 0 && (
                             <div className="pixel-text-sm text-[var(--pixel-text-dim)]">
-                              🌿 Bought: {day.herbsBought.map((h) => `${HERB_NAMES[h.herbId]} ×${h.qty}`).join(", ")}
+                              🌿 Bought:{" "}
+                              {day.herbsBought
+                                .map((h) => `${HERB_NAMES[h.herbId]} ×${h.qty}`)
+                                .join(", ")}
                             </div>
                           )}
                           {day.potionsMade.length > 0 && (
                             <div className="pixel-text-sm text-[var(--pixel-text-dim)]">
-                              ⚗️ Crafted: {day.potionsMade.map((p) => `${POTION_NAMES[p.potionId]} ×${p.qty}`).join(", ")}
+                              ⚗️ Crafted:{" "}
+                              {day.potionsMade
+                                .map(
+                                  (p) => `${POTION_NAMES[p.potionId]} ×${p.qty}`
+                                )
+                                .join(", ")}
                             </div>
                           )}
                           {day.sales.length > 0 && (
                             <div className="pixel-text-sm text-[var(--pixel-text-dim)]">
-                              🏪 Sold: {day.sales.map((s) => `${s.sold}/${s.offered} @${s.price}g`).join(", ")}
+                              🏪 Sold:{" "}
+                              {day.sales
+                                .map(
+                                  (s) => `${s.sold}/${s.offered} @${s.price}g`
+                                )
+                                .join(", ")}
                             </div>
                           )}
                           {day.errors.length > 0 && (
@@ -659,10 +802,23 @@ export default function HumanPlayerUI({
                 </h3>
                 {playerInputs.historicMarkets.length > 0 ? (
                   <div className="space-y-2">
-                    {Object.entries(playerInputs.historicMarkets[playerInputs.historicMarkets.length - 1] || {})
-                      .filter(([, info]) => (info as { totalOffered: number }).totalOffered > 0 || (info as { totalSold: number }).totalSold > 0)
+                    {Object.entries(
+                      playerInputs.historicMarkets[
+                        playerInputs.historicMarkets.length - 1
+                      ] || {}
+                    )
+                      .filter(
+                        ([, info]) =>
+                          (info as { totalOffered: number }).totalOffered > 0 ||
+                          (info as { totalSold: number }).totalSold > 0
+                      )
                       .map(([potionId, info]) => {
-                        const { totalOffered, totalSold, lowestPrice, highestPrice } = info as {
+                        const {
+                          totalOffered,
+                          totalSold,
+                          lowestPrice,
+                          highestPrice,
+                        } = info as {
                           totalOffered: number;
                           totalSold: number;
                           lowestPrice: number;
@@ -670,14 +826,19 @@ export default function HumanPlayerUI({
                         };
                         const tier = POTION_TIER_LOOKUP[potionId as PotionId];
                         return (
-                          <div key={potionId} className="flex justify-between items-center pixel-text-sm">
+                          <div
+                            key={potionId}
+                            className="flex justify-between items-center pixel-text-sm"
+                          >
                             <span className={getTierColor(tier)}>
                               {POTION_NAMES[potionId as PotionId]}
                             </span>
                             <span className="text-[var(--pixel-text-dim)]">
                               {totalSold}/{totalOffered} @
                               <span className="gold-display ml-1">
-                                {lowestPrice === highestPrice ? lowestPrice : `${lowestPrice}-${highestPrice}`}
+                                {lowestPrice === highestPrice
+                                  ? lowestPrice
+                                  : `${lowestPrice}-${highestPrice}`}
                               </span>
                             </span>
                           </div>
@@ -693,14 +854,22 @@ export default function HumanPlayerUI({
 
               {/* Yesterday's Errors - get from last day in action history */}
               {(() => {
-                const lastDay = playerInputs.actionHistory[playerInputs.actionHistory.length - 1];
+                const lastDay =
+                  playerInputs.actionHistory[
+                    playerInputs.actionHistory.length - 1
+                  ];
                 if (!lastDay || lastDay.errors.length === 0) return null;
                 return (
                   <div className="pixel-frame p-3 border-[var(--pixel-red)]">
-                    <h3 className="pixel-text-sm text-[var(--pixel-red)] mb-2">⚠ YESTERDAY&apos;S ISSUES</h3>
+                    <h3 className="pixel-text-sm text-[var(--pixel-red)] mb-2">
+                      ⚠ YESTERDAY&apos;S ISSUES
+                    </h3>
                     <ul className="space-y-1">
                       {lastDay.errors.map((error: string, i: number) => (
-                        <li key={i} className="pixel-text-sm text-[var(--pixel-red)]">
+                        <li
+                          key={i}
+                          className="pixel-text-sm text-[var(--pixel-red)]"
+                        >
                           • {parseErrorString(error)}
                         </li>
                       ))}
@@ -714,23 +883,38 @@ export default function HumanPlayerUI({
           {/* INVENTORY TAB */}
           {rightTab === "inventory" && (
             <div className="pixel-frame p-4">
-              <h2 className="pixel-heading text-center mb-3">📦 YOUR INVENTORY</h2>
-              
+              <h2 className="pixel-heading text-center mb-3">
+                📦 YOUR INVENTORY
+              </h2>
+
               {/* Herbs */}
               <div className="mb-4">
-                <h3 className="pixel-text-sm text-[var(--pixel-gold)] mb-2">🌿 HERBS</h3>
+                <h3 className="pixel-text-sm text-[var(--pixel-gold)] mb-2">
+                  🌿 HERBS
+                </h3>
                 <div className="space-y-2">
                   {Object.entries(projectedInventory.herbs)
                     .filter(([, qty]) => qty > 0)
                     .map(([herbId, qty]) => (
-                      <div key={herbId} className="pixel-frame p-2 flex justify-between items-center">
-                        <span className="pixel-text-sm">{HERB_NAMES[herbId as HerbId]}</span>
-                        <span className={`pixel-text text-lg ${qty < 0 ? "text-[var(--pixel-red)]" : ""}`}>
+                      <div
+                        key={herbId}
+                        className="pixel-frame p-2 flex justify-between items-center"
+                      >
+                        <span className="pixel-text-sm">
+                          {HERB_NAMES[herbId as HerbId]}
+                        </span>
+                        <span
+                          className={`pixel-text text-lg ${
+                            qty < 0 ? "text-[var(--pixel-red)]" : ""
+                          }`}
+                        >
                           {qty}
                         </span>
                       </div>
                     ))}
-                  {Object.values(projectedInventory.herbs).every((qty) => qty <= 0) && (
+                  {Object.values(projectedInventory.herbs).every(
+                    (qty) => qty <= 0
+                  ) && (
                     <p className="pixel-text-sm text-[var(--pixel-text-dim)] text-center py-2">
                       No herbs
                     </p>
@@ -740,22 +924,31 @@ export default function HumanPlayerUI({
 
               {/* Potions */}
               <div>
-                <h3 className="pixel-text-sm text-[var(--pixel-gold)] mb-2">🧪 POTIONS</h3>
+                <h3 className="pixel-text-sm text-[var(--pixel-gold)] mb-2">
+                  🧪 POTIONS
+                </h3>
                 <div className="space-y-2">
                   {Object.entries(projectedInventory.potions)
                     .filter(([, qty]) => qty > 0)
                     .map(([potionId, qty]) => {
                       const tier = POTION_TIER_LOOKUP[potionId as PotionId];
                       return (
-                        <div key={potionId} className="pixel-frame p-2 flex justify-between items-center">
-                          <span className={`pixel-text-sm ${getTierColor(tier)}`}>
+                        <div
+                          key={potionId}
+                          className="pixel-frame p-2 flex justify-between items-center"
+                        >
+                          <span
+                            className={`pixel-text-sm ${getTierColor(tier)}`}
+                          >
                             {POTION_NAMES[potionId as PotionId]}
                           </span>
                           <span className="pixel-text text-lg">{qty}</span>
                         </div>
                       );
                     })}
-                  {Object.values(projectedInventory.potions).every((qty) => qty <= 0) && (
+                  {Object.values(projectedInventory.potions).every(
+                    (qty) => qty <= 0
+                  ) && (
                     <p className="pixel-text-sm text-[var(--pixel-text-dim)] text-center py-2">
                       No potions
                     </p>
@@ -771,11 +964,18 @@ export default function HumanPlayerUI({
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-[var(--pixel-dark)] border-t-4 border-[var(--pixel-border)]">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="pixel-text-sm text-[var(--pixel-text-dim)]">
-            <span>Buying: {Object.values(herbBuys).reduce((s, q) => s + q, 0)} herbs</span>
+            <span>
+              Buying: {Object.values(herbBuys).reduce((s, q) => s + q, 0)} herbs
+            </span>
             <span className="mx-2">•</span>
-            <span>Crafting: {Object.values(potionCrafts).reduce((s, q) => s + q, 0)} potions</span>
+            <span>
+              Crafting: {Object.values(potionCrafts).reduce((s, q) => s + q, 0)}{" "}
+              potions
+            </span>
             <span className="mx-2">•</span>
-            <span>Selling: {offers.reduce((s, o) => s + o.qty, 0)} potions</span>
+            <span>
+              Selling: {offers.reduce((s, o) => s + o.qty, 0)} potions
+            </span>
           </div>
           <button
             onClick={handleSubmit}

@@ -13,7 +13,7 @@ import {
   PlayerUsageStats,
 } from "@/lib/types";
 import { createHook, getWritable } from "workflow";
-import { aiPlayerStep } from "./ai-player-step";
+import { aiPlayerStep, PlayerStepResult } from "./ai-player-step";
 import { chooseAlchemistName, NameResult, UsageData } from "./name-step";
 
 // Calculate cost in USD from usage data and model pricing
@@ -172,8 +172,50 @@ export async function gameWorkflow(config: GameConfig) {
       (p, idx) => p.isHuman && !disqualifiedIdxs.has(idx)
     );
 
-    // If there's a human player, handle them first (need to wait for their input)
+    // Start AI players IMMEDIATELY (in parallel with human input)
+    console.log(`[Game] Starting AI players in parallel...`);
+    const aiStartTime = Date.now();
+
+    // Create promises for all AI players right away
+    const aiPromises: Promise<{
+      idx: number;
+      outputs: PlayerOutputs;
+      result: PlayerStepResult | null;
+    }>[] = updatedConfig.runtime.players.map(async (player, idx) => {
+      const isDisqualified = disqualifiedIdxs.has(idx);
+
+      // Human player - will be handled separately
+      if (player.isHuman) {
+        // Return placeholder - will be replaced with actual human output
+        return { idx, outputs: null as unknown as PlayerOutputs, result: null };
+      }
+
+      // Disqualified player - empty outputs
+      if (isDisqualified) {
+        return {
+          idx,
+          outputs: {
+            buyHerbs: [],
+            makePotions: [],
+            potionOffers: [],
+          } as PlayerOutputs,
+          result: null,
+        };
+      }
+
+      // AI player - run in parallel with others AND with human input
+      const result = await aiPlayerStep(
+        playerInputs[idx],
+        player.model,
+        false,
+        player.strategyPrompt
+      );
+      return { idx, outputs: result.outputs, result };
+    });
+
+    // If there's a human player, wait for their input
     let humanOutputs: PlayerOutputs | null = null;
+    let humanStartTime = 0;
     if (humanPlayerIdx >= 0) {
       const playerInput = playerInputs[humanPlayerIdx];
       const hookToken = `${hookPrefix}:day${day}:player${humanPlayerIdx}`;
@@ -182,7 +224,7 @@ export async function gameWorkflow(config: GameConfig) {
       console.log(`[Game] Hook token: ${hookToken}`);
 
       // Track start time for human player
-      const startTime = await getTimestamp();
+      humanStartTime = await getTimestamp();
 
       // Create hook FIRST before streaming (so it exists when client tries to resume)
       const hook = createHook<PlayerOutputs>({ token: hookToken });
@@ -203,12 +245,36 @@ export async function gameWorkflow(config: GameConfig) {
       console.log(`[Game] Streaming waiting state to client...`);
       await streamContentToClient(writable, waitingState);
 
-      console.log(`[Game] Waiting for human player ${humanPlayerIdx} input...`);
+      console.log(
+        `[Game] Waiting for human player ${humanPlayerIdx} input (AIs running in background)...`
+      );
       humanOutputs = await hook;
+      console.log(`[Game] Received human player ${humanPlayerIdx} input`);
 
-      // Track end time and calculate duration
+      // Stream "waiting for AIs" state so user knows we're processing
+      const waitingForAIsState: GameState = {
+        ...gameState,
+        currentDay: day,
+        disqualifiedPlayers: disqualified,
+        playerUsageStats: [...playerUsageStats],
+        waitingForHuman: {
+          ...waitingState.waitingForHuman!,
+          waitingForAIs: true, // Signal that human is done, waiting for AIs
+        },
+      };
+      await streamContentToClient(writable, waitingForAIsState);
+    }
+
+    // Now wait for all AI players to complete
+    const results = await Promise.all(aiPromises);
+    console.log(
+      `[Game] All AI players completed in ${Date.now() - aiStartTime}ms`
+    );
+
+    // Track human player timing after AIs complete (to capture full wait time)
+    if (humanPlayerIdx >= 0 && humanOutputs) {
       const endTime = await getTimestamp();
-      const durationMs = endTime - startTime;
+      const durationMs = endTime - humanStartTime;
       console.log(
         `[Game] Human player ${humanPlayerIdx} took ${(
           durationMs / 1000
@@ -228,52 +294,12 @@ export async function gameWorkflow(config: GameConfig) {
         0 // No cost for human
       );
 
-      console.log(`[Game] Received human player ${humanPlayerIdx} input`);
-    }
-
-    // Run all AI players in PARALLEL
-    console.log(
-      `[Game] Running ${updatedConfig.runtime.players.length} AI players in parallel...`
-    );
-    const aiStartTime = Date.now();
-
-    const playerPromises = updatedConfig.runtime.players.map(
-      async (player, idx) => {
-        const isDisqualified = disqualifiedIdxs.has(idx);
-
-        // Human player - already handled above
-        if (player.isHuman && !isDisqualified) {
-          return { idx, outputs: humanOutputs!, result: null };
-        }
-
-        // Disqualified player - empty outputs
-        if (isDisqualified) {
-          return {
-            idx,
-            outputs: {
-              buyHerbs: [],
-              makePotions: [],
-              potionOffers: [],
-            } as PlayerOutputs,
-            result: null,
-          };
-        }
-
-        // AI player - run in parallel with others
-        const result = await aiPlayerStep(
-          playerInputs[idx],
-          player.model,
-          false,
-          player.strategyPrompt
-        );
-        return { idx, outputs: result.outputs, result };
+      // Update human player result with actual outputs
+      const humanResult = results.find((r) => r.idx === humanPlayerIdx);
+      if (humanResult) {
+        humanResult.outputs = humanOutputs;
       }
-    );
-
-    const results = await Promise.all(playerPromises);
-    console.log(
-      `[Game] All AI players completed in ${Date.now() - aiStartTime}ms`
-    );
+    }
 
     // Process results and collect outputs in order
     const playerOutputs: PlayerOutputs[] = [];

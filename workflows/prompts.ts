@@ -14,11 +14,16 @@ const BASE_SYSTEM_PROMPT = `You are an AI playing "The Alchemist", a potion trad
 ## GAME FLOW (each day)
 1. BUY HERBS - spend gold on herbs at today's prices
 2. CRAFT POTIONS - combine 2 herbs into 1 potion (consumes herbs)
-3. SELL POTIONS - list potions at your price. The max price buyers pay is ~5x the herb cost.
+3. SELL POTIONS - list potions at your price
 
 Buy, craft and sell happen on the same day in that order.
 
 Market: All player offers are sorted by price (lowest first). Demand buys from cheapest offers until demand is exhausted. Unsold potions return to your inventory.
+
+## PRICE CAP
+The maximum price buyers will pay is 5x the BASE herb cost (not today's fluctuating price).
+If you list a potion higher than this cap, it will automatically be sold at the capped price.
+Example: If herbs cost 10g base each, max potion price = (10+10) × 5 = 100g
 
 ## RECIPES (Potion = Herb1 + Herb2)
 ${Object.entries(RECIPES)
@@ -33,6 +38,7 @@ ${Object.entries(RECIPES)
 2. Cannot craft without BOTH herbs in inventory
 3. Cannot sell potions you don't have
 4. Actions execute in order: buy → craft → sell
+5. Prices above 5x base herb cost are capped (you still sell, but at capped price)
 
 ## OUTPUT FORMAT
 Return JSON with three arrays. ONLY include items you actually want - omit items with qty 0:

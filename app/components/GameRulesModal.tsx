@@ -130,6 +130,25 @@ export default function GameRulesModal({ isOpen, onClose }: GameRulesModalProps)
             </div>
           </section>
 
+          {/* Price Cap */}
+          <section>
+            <h3 className="pixel-heading text-[var(--pixel-gold)] mb-3">💰 PRICE CAP</h3>
+            <div className="pixel-frame p-4 space-y-2">
+              <p className="pixel-text-sm">
+                • The maximum price buyers will pay is <span className="text-[var(--pixel-gold)]">5× the base herb cost</span>
+              </p>
+              <p className="pixel-text-sm">
+                • This is based on the <span className="text-[var(--pixel-green-bright)]">base price</span>, not today&apos;s fluctuating price
+              </p>
+              <p className="pixel-text-sm">
+                • If you set a price higher than the cap, it will <span className="text-[var(--pixel-gold)]">automatically sell at the capped price</span>
+              </p>
+              <p className="pixel-text-sm text-[var(--pixel-text-dim)]">
+                Example: If herbs cost 10g base each, max potion price = (10+10) × 5 = 100g
+              </p>
+            </div>
+          </section>
+
           {/* Tiers */}
           <section>
             <h3 className="pixel-heading text-[var(--pixel-gold)] mb-3">⭐ ITEM TIERS</h3>

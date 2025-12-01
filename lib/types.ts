@@ -109,6 +109,7 @@ export type GameState = {
     hookToken: string;
     playerInputs: PlayerInputs; // The inputs the human needs to make decisions
     herbPrices: Record<HerbId, number>; // Current day herb prices
+    waitingForAIs?: boolean; // True when human has submitted but AIs are still running
   };
 };
 

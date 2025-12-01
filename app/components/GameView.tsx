@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   GameState,
   Player,
@@ -14,10 +14,13 @@ import {
   POTION_TIERS,
   DayRecord,
   PlayerDayActions,
+  PlayerDayHistory,
+  PotionMarketData,
   RECIPES,
 } from "@/lib/types";
 import { parseErrorString } from "@/lib/format-utils";
 import { GamePhase } from "@/lib/hooks/use-game-stream";
+import { useStrategies } from "@/lib/hooks/use-strategies";
 import HumanPlayerUI from "./HumanPlayerUI";
 
 interface GameViewProps {
@@ -32,6 +35,7 @@ interface GameViewProps {
     hookToken: string;
     playerInputs: PlayerInputs;
     herbPrices: Record<HerbId, number>;
+    waitingForAIs?: boolean;
   };
   onReset: () => void;
   onSubmitHumanTurn: (hookToken: string, outputs: PlayerOutputs) => Promise<boolean>;
@@ -67,6 +71,12 @@ export default function GameView({
   const [selectedPlayerIdx, setSelectedPlayerIdx] = useState(0);
   const [autoAdvance, setAutoAdvance] = useState(true);
   const [isSubmittingHumanTurn, setIsSubmittingHumanTurn] = useState(false);
+
+  // Strategy management
+  const { addStrategy } = useStrategies();
+
+  // Get starting gold from first day state
+  const startingGold = dayStates[0]?.playerInventories[0]?.gold || 1000;
 
   // Handle human player turn submission
   const handleHumanSubmit = async (outputs: PlayerOutputs) => {
@@ -182,8 +192,26 @@ export default function GameView({
     return finalRankings[0];
   }, [isCompleted, latestState, players]);
 
-  // Human player turn - show interactive UI
+  // Human player turn - show interactive UI or "waiting for AIs" status
   if (waitingForHuman) {
+    // If human has submitted and we're waiting for AIs
+    if (waitingForHuman.waitingForAIs || isSubmittingHumanTurn) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center p-8 pixel-grid">
+          <div className="pixel-frame-gold text-center max-w-lg p-8">
+            <div className="text-6xl mb-6 pixel-pulse">🤖</div>
+            <h2 className="pixel-title text-xl mb-4">
+              WAITING FOR AI PLAYERS
+            </h2>
+            <p className="pixel-text text-[var(--pixel-text-dim)] mb-6">
+              Your turn has been submitted. The AI players are still thinking...
+            </p>
+            <div className="loading-dots text-2xl text-[var(--pixel-gold)]">⏳</div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <HumanPlayerUI
         playerInputs={waitingForHuman.playerInputs}
@@ -303,6 +331,9 @@ export default function GameView({
             setSelectedPlayerIdx(playerIdx);
             setViewMode("details");
           }}
+          dayStates={dayStates}
+          startingGold={startingGold}
+          onSaveStrategy={addStrategy}
         />
       ) : (
         <DetailsView
@@ -343,6 +374,9 @@ function OverviewView({
   totalDays,
   phase,
   onViewDetails,
+  dayStates,
+  startingGold,
+  onSaveStrategy,
 }: {
   playerStats: {
     player: Player;
@@ -372,9 +406,114 @@ function OverviewView({
   totalDays: number;
   phase: GamePhase;
   onViewDetails: (playerIdx: number) => void;
+  dayStates: GameState[];
+  startingGold: number;
+  onSaveStrategy: (name: string, prompt: string) => void;
 }) {
   // State for strategy popover
   const [showStrategyFor, setShowStrategyFor] = useState<number | null>(null);
+  
+  // State for strategy generation
+  const [generatingFor, setGeneratingFor] = useState<number | null>(null);
+  const [generatedStrategy, setGeneratedStrategy] = useState<{ playerIdx: number; strategy: string } | null>(null);
+  const [saveStrategyName, setSaveStrategyName] = useState("");
+  
+  const isCompleted = phase === "completed";
+  
+  // Build action history for a player from day states
+  const getPlayerActionHistory = useCallback((playerIdx: number): PlayerDayHistory[] => {
+    const history: PlayerDayHistory[] = [];
+    const latestState = dayStates[dayStates.length - 1];
+    if (!latestState?.dayRecords) return history;
+    
+    for (const record of latestState.dayRecords) {
+      const actions = record.playerActions[playerIdx];
+      if (!actions) continue;
+      
+      history.push({
+        day: record.day,
+        herbPrices: record.herbPrices,
+        goldStart: actions.startInventory.gold,
+        goldEnd: actions.endInventory.gold,
+        herbsBought: actions.actualBuyHerbs,
+        potionsMade: actions.actualMakePotions,
+        sales: actions.salesResults.map(s => ({
+          ...s,
+          offered: actions.actualOffers.find(o => o.potionId === s.potionId)?.qty || s.offered
+        })),
+        errors: actions.errors,
+      });
+    }
+    return history;
+  }, [dayStates]);
+  
+  // Build market history from day states
+  const getMarketHistory = useCallback((): Record<PotionId, PotionMarketData>[] => {
+    const latestState = dayStates[dayStates.length - 1];
+    if (!latestState?.processedMarketByDay) return [];
+    
+    return latestState.processedMarketByDay.map(market => {
+      const result: Record<PotionId, PotionMarketData> = {} as Record<PotionId, PotionMarketData>;
+      for (const [potionId, info] of Object.entries(market.potionInformation)) {
+        const offers = market.processedOffers.filter(o => o.potionId === potionId);
+        const totalOffered = offers.reduce((s, o) => s + o.qty, 0);
+        result[potionId as PotionId] = {
+          totalOffered,
+          totalSold: info.fulfilled,
+          lowestPrice: info.lowestPrice,
+          highestPrice: info.highestPrice,
+        };
+      }
+      return result;
+    });
+  }, [dayStates]);
+  
+  // Generate strategy for a player
+  const handleGenerateStrategy = async (stats: typeof playerStats[0]) => {
+    if (stats.player.isHuman) return;
+    
+    setGeneratingFor(stats.playerIdx);
+    setGeneratedStrategy(null);
+    
+    try {
+      const response = await fetch("/api/generate-strategy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          modelId: stats.player.model,
+          playerName: stats.player.name,
+          finalGold: stats.gold,
+          startingGold,
+          finalRank: playerStats.findIndex(p => p.playerIdx === stats.playerIdx) + 1,
+          totalPlayers: playerStats.length,
+          actionHistory: getPlayerActionHistory(stats.playerIdx),
+          marketHistory: getMarketHistory(),
+          previousStrategy: stats.player.strategyPrompt,
+          totalDays,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to generate strategy");
+      }
+      
+      const data = await response.json();
+      setGeneratedStrategy({ playerIdx: stats.playerIdx, strategy: data.strategy });
+      setSaveStrategyName(`${stats.player.name} Strategy`);
+    } catch (error) {
+      console.error("Strategy generation failed:", error);
+    } finally {
+      setGeneratingFor(null);
+    }
+  };
+  
+  const handleSaveGeneratedStrategy = () => {
+    if (generatedStrategy && saveStrategyName.trim()) {
+      onSaveStrategy(saveStrategyName.trim(), generatedStrategy.strategy);
+      setGeneratedStrategy(null);
+      setSaveStrategyName("");
+    }
+  };
   
   // Calculate totals for summary
   const totalCost = playerStats.reduce((s, p) => s + p.costUsd, 0);
@@ -541,6 +680,26 @@ function OverviewView({
               </div>
             )}
 
+            {/* Generate Strategy button - only for AI players when game is complete */}
+            {isCompleted && !stats.player.isHuman && !stats.isDisqualified && (
+              <div className="mt-3">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleGenerateStrategy(stats);
+                  }}
+                  disabled={generatingFor !== null}
+                  className="pixel-btn w-full text-xs"
+                >
+                  {generatingFor === stats.playerIdx ? (
+                    <>Generating<span className="loading-dots"></span></>
+                  ) : (
+                    "📝 GENERATE STRATEGY"
+                  )}
+                </button>
+              </div>
+            )}
+
             {/* Click hint */}
             <div className="mt-3 text-center">
               <span className="pixel-text-sm text-[var(--pixel-text-dim)]">Click for details →</span>
@@ -548,6 +707,60 @@ function OverviewView({
           </div>
         ))}
       </div>
+
+      {/* Generated Strategy Modal */}
+      {generatedStrategy && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80">
+          <div className="pixel-frame-gold max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-[var(--pixel-border)]">
+              <h3 className="pixel-heading">
+                📝 Generated Strategy - {playerStats.find(p => p.playerIdx === generatedStrategy.playerIdx)?.player.name}
+              </h3>
+              <button
+                onClick={() => {
+                  setGeneratedStrategy(null);
+                  setSaveStrategyName("");
+                }}
+                className="pixel-btn text-xs"
+              >
+                ✕ CLOSE
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto flex-1">
+              <div className="pixel-frame p-4 mb-4 bg-[var(--pixel-dark)]">
+                <p className="pixel-text whitespace-pre-wrap text-[var(--pixel-text)]">
+                  {generatedStrategy.strategy}
+                </p>
+              </div>
+              
+              {/* Save Strategy Section */}
+              <div className="pixel-frame p-4">
+                <h4 className="pixel-text-sm text-[var(--pixel-gold)] mb-3">💾 SAVE THIS STRATEGY</h4>
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    value={saveStrategyName}
+                    onChange={(e) => setSaveStrategyName(e.target.value)}
+                    placeholder="Strategy name..."
+                    className="pixel-input w-full"
+                    maxLength={50}
+                  />
+                  <button
+                    onClick={handleSaveGeneratedStrategy}
+                    disabled={!saveStrategyName.trim()}
+                    className="pixel-btn pixel-btn-primary w-full"
+                  >
+                    ✓ SAVE STRATEGY
+                  </button>
+                  <p className="pixel-text-sm text-[var(--pixel-text-dim)] text-center">
+                    Saved strategies can be assigned to AI players in future games
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
