@@ -11,7 +11,7 @@ export const PLAYER_SYSTEM_PROMPT = `You are an AI playing "The Alchemist", a po
 ## GAME FLOW (each day)
 1. BUY HERBS - spend gold on herbs at today's prices
 2. CRAFT POTIONS - combine 2 herbs into 1 potion (consumes herbs)
-3. SELL POTIONS - list potions at your price
+3. SELL POTIONS - list potions at your price. Note: the max price that buyers are willing to pay is ~5x the base cost of the herbs.
 
 Make sure to buy herbs for the potions you want to craft and to sell the potions you have crafted.
 

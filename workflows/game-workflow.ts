@@ -242,6 +242,7 @@ export async function gameWorkflow(config: GameConfig) {
         // If this step failed, disqualify the player for future rounds
         if (!result.success) {
           const reason = result.error || "Unknown error";
+          console.log(`[Game] ⚠ Disqualifying player ${idx}: ${reason}`);
           disqualified.push({ playerIdx: idx, reason });
         }
 

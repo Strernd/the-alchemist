@@ -127,6 +127,9 @@ export default function GameView({
 
       // Get usage stats from latest state
       const usageStats = latestState.playerUsageStats?.[idx];
+      
+      // Check if player is disqualified
+      const disqualification = latestState.disqualifiedPlayers?.find(d => d.playerIdx === idx);
 
       return {
         player,
@@ -148,6 +151,9 @@ export default function GameView({
         costUsd: usageStats?.costUsd || 0,
         totalTimeMs: usageStats?.totalTimeMs || 0,
         callCount: usageStats?.callCount || 0,
+        // Disqualification
+        isDisqualified: !!disqualification,
+        disqualificationReason: disqualification?.reason,
       };
     }).sort((a, b) => b.gold - a.gold);
   }, [dayStates, latestState, players]);
@@ -480,6 +486,13 @@ function OverviewView({
             {stats.errors > 0 && (
               <div className="mt-2 text-center">
                 <span className="pixel-text-sm text-[var(--pixel-red)]">⚠ {stats.errors} errors</span>
+              </div>
+            )}
+
+            {/* Disqualification indicator */}
+            {stats.isDisqualified && (
+              <div className="mt-2 text-center">
+                <span className="pixel-text-sm text-[var(--pixel-red)]">💀 DISQUALIFIED</span>
               </div>
             )}
 

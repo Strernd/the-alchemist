@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
 import { GameState, Player, PlayerOutputs } from "@/lib/types";
+import { useCallback, useEffect, useState } from "react";
 
 export type GamePhase = "setup" | "running" | "completed" | "error";
 
@@ -44,7 +44,10 @@ function saveRun(run: StoredRun) {
   try {
     const runs = getStoredRuns();
     // Add to beginning, limit to 20 runs
-    const updated = [run, ...runs.filter((r) => r.runId !== run.runId)].slice(0, 20);
+    const updated = [run, ...runs.filter((r) => r.runId !== run.runId)].slice(
+      0,
+      20
+    );
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
   } catch (e) {
     console.error("Failed to save run:", e);
@@ -97,10 +100,12 @@ export function useGameStream() {
         if (response.ok) {
           const { runs } = await response.json();
           setPastRuns(runs);
-          
+
           // Clean up runs that no longer exist
           const validRunIds = new Set(runs.map((r: RunInfo) => r.runId));
-          const invalidRuns = storedRuns.filter((r) => !validRunIds.has(r.runId));
+          const invalidRuns = storedRuns.filter(
+            (r) => !validRunIds.has(r.runId)
+          );
           invalidRuns.forEach((r) => removeStoredRun(r.runId));
         }
       } catch (e) {
@@ -111,59 +116,59 @@ export function useGameStream() {
     fetchRuns();
   }, [state.phase]); // Refetch when phase changes (e.g., after completing a game)
 
-  const startGame = useCallback(async (
-    players: Player[],
-    options?: { seed?: string; days?: number }
-  ) => {
-    const days = options?.days || 5;
-    setState((prev) => ({
-      ...prev,
-      phase: "running",
-      players,
-      gameStates: [],
-      error: null,
-      totalDaysConfig: days,
-    }));
-
-    try {
-      // Start the game workflow
-      const response = await fetch("/api/game/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ players, seed: options?.seed, days }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to start game");
-      }
-
-      const { runId, seed: gameSeed } = await response.json();
-      setState((prev) => ({ ...prev, runId, seed: gameSeed }));
-
-      // Save placeholder run - names will be updated when AI chooses them
-      saveRun({
-        runId,
-        seed: gameSeed,
-        playerNames: players.map((_, i) => `Alchemist ${i + 1}`),
-        createdAt: new Date().toISOString(),
-      });
-
-      // Connect to the stream (will update names when first state arrives)
-      await streamGameData(runId, players);
-    } catch (error) {
+  const startGame = useCallback(
+    async (players: Player[], options?: { seed?: string; days?: number }) => {
+      const days = options?.days || 5;
       setState((prev) => ({
         ...prev,
-        phase: "error",
-        error: error instanceof Error ? error.message : "Unknown error",
+        phase: "running",
+        players,
+        gameStates: [],
+        error: null,
+        totalDaysConfig: days,
       }));
-    }
-  }, []);
+
+      try {
+        // Start the game workflow
+        const response = await fetch("/api/game/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ players, seed: options?.seed, days }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to start game");
+        }
+
+        const { runId, seed: gameSeed } = await response.json();
+        setState((prev) => ({ ...prev, runId, seed: gameSeed }));
+
+        // Save placeholder run - names will be updated when AI chooses them
+        saveRun({
+          runId,
+          seed: gameSeed,
+          playerNames: players.map((_, i) => `Alchemist ${i + 1}`),
+          createdAt: new Date().toISOString(),
+        });
+
+        // Connect to the stream (will update names when first state arrives)
+        await streamGameData(runId, players);
+      } catch (error) {
+        setState((prev) => ({
+          ...prev,
+          phase: "error",
+          error: error instanceof Error ? error.message : "Unknown error",
+        }));
+      }
+    },
+    []
+  );
 
   const loadExistingRun = useCallback(async (runInfo: RunInfo) => {
     // Find the stored run to get player info
     const storedRuns = getStoredRuns();
     const storedRun = storedRuns.find((r) => r.runId === runInfo.runId);
-    
+
     if (!storedRun) {
       setState((prev) => ({
         ...prev,
@@ -203,7 +208,7 @@ export function useGameStream() {
 
   const streamGameData = async (runId: string, initialPlayers: Player[]) => {
     console.log("[Game] Connecting to stream for run:", runId);
-    
+
     const streamResponse = await fetch(`/api/game/stream/${runId}`);
     if (!streamResponse.ok || !streamResponse.body) {
       console.error("[Game] Stream connection failed:", streamResponse.status);
@@ -222,7 +227,10 @@ export function useGameStream() {
         const { done, value } = await reader.read();
 
         if (done) {
-          console.log("[Game] Stream ended. Total states received:", statesReceived);
+          console.log(
+            "[Game] Stream ended. Total states received:",
+            statesReceived
+          );
           setState((prev) => ({ ...prev, phase: "completed" }));
           break;
         }
@@ -239,16 +247,25 @@ export function useGameStream() {
           try {
             const gameState = JSON.parse(trimmed) as GameState;
             statesReceived++;
-            console.log("[Game] Received state #", statesReceived, "currentDay:", gameState.currentDay);
+            console.log(
+              "[Game] Received state #",
+              statesReceived,
+              "currentDay:",
+              gameState.currentDay
+            );
 
             // Update player names from AI-chosen names (first state only)
-            if (!namesUpdated && gameState.playerNames && gameState.playerNames.length > 0) {
+            if (
+              !namesUpdated &&
+              gameState.playerNames &&
+              gameState.playerNames.length > 0
+            ) {
               const updatedPlayers = initialPlayers.map((p, idx) => ({
                 ...p,
                 name: gameState.playerNames?.[idx] || p.name,
               }));
               namesUpdated = true;
-              
+
               // Update localStorage with AI-chosen names
               setState((prev) => {
                 if (prev.runId && prev.seed) {
@@ -273,7 +290,10 @@ export function useGameStream() {
               gameStates: [...prev.gameStates, gameState],
             }));
           } catch (e) {
-            console.log("[Game] Skipping non-JSON line:", trimmed.substring(0, 100));
+            console.log(
+              "[Game] Skipping non-JSON line:",
+              trimmed.substring(0, 100)
+            );
           }
         }
       }
@@ -316,32 +336,37 @@ export function useGameStream() {
   }, []);
 
   // Submit human player turn via the hook API
-  const submitHumanTurn = useCallback(async (hookToken: string, outputs: PlayerOutputs) => {
-    console.log("[Game] Submitting human turn for token:", hookToken);
-    try {
-      const response = await fetch("/api/game/submit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hookToken, outputs }),
-      });
+  const submitHumanTurn = useCallback(
+    async (hookToken: string, outputs: PlayerOutputs) => {
+      console.log("[Game] Submitting human turn for token:", hookToken);
+      try {
+        const response = await fetch("/api/game/submit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ hookToken, outputs }),
+        });
 
-      if (!response.ok) {
-        const error = await response.json();
-        console.error("[Game] Human turn submission failed:", error);
-        throw new Error(error.error || "Failed to submit turn");
+        if (!response.ok) {
+          const error = await response.json();
+          console.error("[Game] Human turn submission failed:", error);
+          throw new Error(error.error || "Failed to submit turn");
+        }
+
+        console.log("[Game] Human turn submitted successfully");
+        return true;
+      } catch (error) {
+        console.error("[Game] Error submitting human turn:", error);
+        throw error;
       }
+    },
+    []
+  );
 
-      console.log("[Game] Human turn submitted successfully");
-      return true;
-    } catch (error) {
-      console.error("[Game] Error submitting human turn:", error);
-      throw error;
-    }
-  }, []);
-
-  // Game states: [initial, afterDay1, afterDay2, afterDay3, afterDay4, afterDay5]
-  // We want to show days 1-5, so we skip the initial state
-  const processedDays = state.gameStates.slice(1);
+  // Game states: [initial, (waiting1?), afterDay1, (waiting2?), afterDay2, ...]
+  // We want to show completed days only - filter out initial state and waiting states
+  const processedDays = state.gameStates
+    .slice(1) // Skip initial state
+    .filter((gs) => !gs.waitingForHuman); // Skip "waiting for human" states
 
   // Get waiting for human state from the latest game state
   const latestState = state.gameStates[state.gameStates.length - 1];
