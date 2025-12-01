@@ -432,9 +432,10 @@
   text-transform: uppercase;
 }
 
-.tier-1 { color: #ffffff; border-color: #ffffff; background: rgba(255,255,255,0.1); }
-.tier-2 { color: #2a9d8f; border-color: #2a9d8f; background: rgba(42,157,143,0.1); }
-.tier-3 { color: #4895ef; border-color: #4895ef; background: rgba(72,149,239,0.1); }
+/* Tier colors: T1=green, T2=blue, T3=purple */
+.tier-1 { color: var(--pixel-green-bright); border-color: var(--pixel-green-bright); background: rgba(0,255,128,0.1); }
+.tier-2 { color: var(--pixel-blue-bright); border-color: var(--pixel-blue-bright); background: rgba(0,191,255,0.1); }
+.tier-3 { color: var(--pixel-purple-bright); border-color: var(--pixel-purple-bright); background: rgba(200,160,255,0.1); }
 
 /* Player colors */
 .player-color-0 { color: var(--player-1); border-color: var(--player-1); }

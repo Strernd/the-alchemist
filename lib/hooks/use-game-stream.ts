@@ -15,10 +15,19 @@ export interface GameStreamState {
   totalDaysConfig: number;
 }
 
+export type StoredPlayer = {
+  name: string;
+  model: string;
+  isHuman?: boolean;
+};
+
 export type StoredRun = {
   runId: string;
   seed: string;
-  playerNames: string[];
+  // New format: full player info
+  players?: StoredPlayer[];
+  // Legacy format: just names (for backward compatibility)
+  playerNames?: string[];
   createdAt: string;
 };
 
@@ -147,7 +156,11 @@ export function useGameStream() {
         saveRun({
           runId,
           seed: gameSeed,
-          playerNames: players.map((_, i) => `Alchemist ${i + 1}`),
+          players: players.map((p, i) => ({
+            name: `Alchemist ${i + 1}`,
+            model: p.model,
+            isHuman: p.isHuman,
+          })),
           createdAt: new Date().toISOString(),
         });
 
@@ -178,11 +191,24 @@ export function useGameStream() {
       return;
     }
 
-    // Create Player objects from stored names
-    const players: Player[] = storedRun.playerNames.map((name) => ({
-      name,
-      model: "unknown", // Model info not stored, but not needed for viewing
-    }));
+    // Create Player objects from stored data (support both new and legacy format)
+    let players: Player[];
+    if (storedRun.players) {
+      // New format with full player info
+      players = storedRun.players.map((p) => ({
+        name: p.name,
+        model: p.model,
+        isHuman: p.isHuman,
+      }));
+    } else if (storedRun.playerNames) {
+      // Legacy format: just names
+      players = storedRun.playerNames.map((name) => ({
+        name,
+        model: "unknown",
+      }));
+    } else {
+      players = [];
+    }
 
     setState((prev) => ({
       ...prev,
@@ -272,7 +298,11 @@ export function useGameStream() {
                   saveRun({
                     runId: prev.runId,
                     seed: prev.seed,
-                    playerNames: updatedPlayers.map((p) => p.name),
+                    players: updatedPlayers.map((p) => ({
+                      name: p.name,
+                      model: p.model,
+                      isHuman: p.isHuman,
+                    })),
                     createdAt: new Date().toISOString(),
                   });
                 }

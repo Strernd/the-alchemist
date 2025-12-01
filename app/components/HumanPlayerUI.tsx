@@ -11,6 +11,7 @@ import {
   RECIPES,
   Tier,
 } from "@/lib/types";
+import { parseErrorString } from "@/lib/format-utils";
 import { useState, useMemo } from "react";
 import GameRulesModal from "./GameRulesModal";
 
@@ -108,7 +109,7 @@ export default function HumanPlayerUI({
     });
   };
 
-  // Check max craftable for a potion
+  // Check max craftable for a potion (total available, including what's already queued)
   const maxCraftable = (potionId: PotionId): number => {
     const recipe = RECIPES[potionId];
     const herbsAfterBuys: Record<HerbId, number> = { ...inventory.herbs };
@@ -116,16 +117,19 @@ export default function HumanPlayerUI({
       herbsAfterBuys[herbId as HerbId] = (herbsAfterBuys[herbId as HerbId] || 0) + qty;
     });
 
-    // Subtract herbs used by other crafts
+    // Subtract herbs used by ALL crafts (including this potion)
     Object.entries(potionCrafts).forEach(([pid, qty]) => {
-      if (pid !== potionId && qty > 0) {
+      if (qty > 0) {
         RECIPES[pid as PotionId].forEach((herbId) => {
           herbsAfterBuys[herbId] = (herbsAfterBuys[herbId] || 0) - qty;
         });
       }
     });
 
-    return Math.min(...recipe.map((herbId) => Math.max(0, herbsAfterBuys[herbId] || 0)));
+    // Max is current crafted + remaining available herbs
+    const currentCrafted = potionCrafts[potionId] || 0;
+    const remainingHerbs = Math.min(...recipe.map((herbId) => Math.max(0, herbsAfterBuys[herbId] || 0)));
+    return currentCrafted + remainingHerbs;
   };
 
   // Handle herb buy change
@@ -136,7 +140,7 @@ export default function HumanPlayerUI({
   // Handle potion craft change
   const setPotionCraft = (potionId: PotionId, qty: number) => {
     const max = maxCraftable(potionId);
-    setPotionCrafts((prev) => ({ ...prev, [potionId]: Math.max(0, Math.min(qty, max + (prev[potionId] || 0))) }));
+    setPotionCrafts((prev) => ({ ...prev, [potionId]: Math.max(0, Math.min(qty, max)) }));
   };
 
   // Get available potions for offers (current inventory + crafted - already offered)
@@ -228,8 +232,8 @@ export default function HumanPlayerUI({
   const getTierColor = (tier: Tier) => {
     switch (tier) {
       case "T1": return "text-[var(--pixel-green-bright)]";
-      case "T2": return "text-[var(--pixel-gold)]";
-      case "T3": return "text-[var(--pixel-purple)]";
+      case "T2": return "text-[var(--pixel-blue-bright)]";
+      case "T3": return "text-[var(--pixel-purple-bright)]";
     }
   };
 
@@ -317,9 +321,10 @@ export default function HumanPlayerUI({
                           <span className="gold-display text-lg">{price}💰</span>
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={() => setHerbBuy(herbId, buying - 1)}
+                              onClick={(e) => setHerbBuy(herbId, buying - (e.shiftKey ? 10 : 1))}
                               disabled={buying <= 0}
                               className="pixel-btn px-3 py-2"
+                              title="Click: -1, Shift+Click: -10"
                             >
                               −
                             </button>
@@ -331,9 +336,10 @@ export default function HumanPlayerUI({
                               min={0}
                             />
                             <button
-                              onClick={() => setHerbBuy(herbId, buying + 1)}
+                              onClick={(e) => setHerbBuy(herbId, buying + (e.shiftKey ? 10 : 1))}
                               disabled={projectedInventory.gold - price < 0}
                               className="pixel-btn px-3 py-2"
+                              title="Click: +1, Shift+Click: +10"
                             >
                               +
                             </button>
@@ -378,26 +384,28 @@ export default function HumanPlayerUI({
                             {POTION_NAMES[potionId]}
                           </span>
                           <span className="pixel-text-sm text-[var(--pixel-text-dim)]">
-                            max: {max + crafting}
+                            max: {max}
                           </span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="pixel-text-sm text-[var(--pixel-gold)]">
-                            {recipe.map((h) => HERB_NAMES[h].split(" ")[0]).join(" + ")}
+                          <span className="pixel-text-sm text-[var(--pixel-text-dim)]">
+                            {recipe.map((h) => HERB_NAMES[h]).join(" + ")}
                           </span>
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={() => setPotionCraft(potionId, crafting - 1)}
+                              onClick={(e) => setPotionCraft(potionId, crafting - (e.shiftKey ? 10 : 1))}
                               disabled={crafting <= 0}
                               className="pixel-btn px-3 py-2"
+                              title="Click: -1, Shift+Click: -10"
                             >
                               −
                             </button>
                             <span className="pixel-text w-10 text-center text-lg">{crafting}</span>
                             <button
-                              onClick={() => setPotionCraft(potionId, crafting + 1)}
+                              onClick={(e) => setPotionCraft(potionId, crafting + (e.shiftKey ? 10 : 1))}
                               disabled={!canMake}
                               className="pixel-btn px-3 py-2"
+                              title="Click: +1, Shift+Click: +10"
                             >
                               +
                             </button>
@@ -560,69 +568,146 @@ export default function HumanPlayerUI({
 
           {/* HISTORY TAB */}
           {rightTab === "history" && (
-            <div className="pixel-frame p-4">
-              <h2 className="pixel-heading text-center mb-3">📊 MARKET HISTORY</h2>
-              {playerInputs.historicDemands.length > 0 ? (
-                <div className="space-y-3">
-                  <p className="pixel-text-sm text-[var(--pixel-text-dim)] text-center mb-2">
-                    Yesterday&apos;s market results
-                  </p>
-                  {Object.entries(playerInputs.historicDemands[playerInputs.historicDemands.length - 1] || {})
-                    .filter(([, info]) => (info as { fulfilled: number }).fulfilled > 0 || (info as { remaining: number }).remaining > 0)
-                    .map(([potionId, info]) => {
-                      const { fulfilled, remaining, lowestPrice, highestPrice } = info as {
-                        fulfilled: number;
-                        remaining: number;
-                        lowestPrice: number;
-                        highestPrice: number;
-                      };
-                      const tier = POTION_TIER_LOOKUP[potionId as PotionId];
+            <div className="pixel-frame p-4 max-h-[calc(100vh-280px)] overflow-y-auto">
+              <h2 className="pixel-heading text-center mb-3">📊 HISTORY & INTEL</h2>
+              
+              {/* HERB PRICE TRENDS */}
+              <div className="mb-4">
+                <h3 className="pixel-text-sm text-[var(--pixel-gold)] mb-2 border-b border-[var(--pixel-border)] pb-1">
+                  🌿 HERB PRICE TRENDS
+                </h3>
+                <p className="pixel-text-sm text-[var(--pixel-text-dim)] mb-2">
+                  {playerInputs.actionHistory.length > 0 
+                    ? `Past ${playerInputs.actionHistory.length} days → Today`
+                    : "Today's prices (Day 1)"}
+                </p>
+                <div className="space-y-1">
+                  {(["T1", "T2", "T3"] as Tier[]).map((tier) => (
+                    <div key={tier}>
+                      <div className={`pixel-text-sm ${getTierColor(tier)} mb-1`}>TIER {tier.slice(1)}</div>
+                      {herbsByTier[tier].map((herbId) => {
+                        const pastPrices = playerInputs.actionHistory.map((d) => d.herbPrices[herbId]);
+                        const currentPrice = herbPrices[herbId];
+                        const priceStr = pastPrices.length > 0
+                          ? `${pastPrices.join(" → ")} → ${currentPrice}`
+                          : `${currentPrice}`;
+                        return (
+                          <div key={herbId} className="flex justify-between pixel-text-sm">
+                            <span className="text-[var(--pixel-text-dim)]">{HERB_NAMES[herbId]}</span>
+                            <span className="gold-display">{priceStr}g</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* YOUR PAST DECISIONS */}
+              {playerInputs.actionHistory.length > 0 && (
+                <div className="mb-4">
+                  <h3 className="pixel-text-sm text-[var(--pixel-gold)] mb-2 border-b border-[var(--pixel-border)] pb-1">
+                    📋 YOUR PAST DECISIONS
+                  </h3>
+                  <div className="space-y-3">
+                    {playerInputs.actionHistory.slice(-3).map((day) => {
+                      const goldChange = day.goldEnd - day.goldStart;
                       return (
-                        <div key={potionId} className="pixel-frame p-3">
-                          <div className={`pixel-text-sm font-bold ${getTierColor(tier)} mb-2`}>
-                            {POTION_NAMES[potionId as PotionId]}
+                        <div key={day.day} className="pixel-frame p-2">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="pixel-text-sm font-bold">Day {day.day}</span>
+                            <span className={`pixel-text-sm ${goldChange >= 0 ? "text-[var(--pixel-green-bright)]" : "text-[var(--pixel-red)]"}`}>
+                              {day.goldStart}g → {day.goldEnd}g ({goldChange >= 0 ? "+" : ""}{goldChange})
+                            </span>
                           </div>
-                          <div className="grid grid-cols-3 gap-2 text-center">
-                            <div>
-                              <div className="pixel-text-sm text-[var(--pixel-text-dim)]">Sold</div>
-                              <div className="pixel-text text-[var(--pixel-green-bright)]">{fulfilled}</div>
+                          {day.herbsBought.length > 0 && (
+                            <div className="pixel-text-sm text-[var(--pixel-text-dim)]">
+                              🌿 Bought: {day.herbsBought.map((h) => `${HERB_NAMES[h.herbId]} ×${h.qty}`).join(", ")}
                             </div>
-                            <div>
-                              <div className="pixel-text-sm text-[var(--pixel-text-dim)]">Unfilled</div>
-                              <div className={`pixel-text ${remaining > 0 ? "text-[var(--pixel-red)]" : "text-[var(--pixel-text-dim)]"}`}>
-                                {remaining}
-                              </div>
+                          )}
+                          {day.potionsMade.length > 0 && (
+                            <div className="pixel-text-sm text-[var(--pixel-text-dim)]">
+                              ⚗️ Crafted: {day.potionsMade.map((p) => `${POTION_NAMES[p.potionId]} ×${p.qty}`).join(", ")}
                             </div>
-                            <div>
-                              <div className="pixel-text-sm text-[var(--pixel-text-dim)]">Price</div>
-                              <div className="pixel-text gold-display">
-                                {lowestPrice === highestPrice ? lowestPrice : `${lowestPrice}-${highestPrice}`}
-                              </div>
+                          )}
+                          {day.sales.length > 0 && (
+                            <div className="pixel-text-sm text-[var(--pixel-text-dim)]">
+                              🏪 Sold: {day.sales.map((s) => `${s.sold}/${s.offered} @${s.price}g`).join(", ")}
                             </div>
-                          </div>
+                          )}
+                          {day.errors.length > 0 && (
+                            <div className="pixel-text-sm text-[var(--pixel-red)]">
+                              ⚠ {day.errors.map(parseErrorString).join("; ")}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
+                    {playerInputs.actionHistory.length > 3 && (
+                      <div className="pixel-text-sm text-[var(--pixel-text-dim)] text-center">
+                        + {playerInputs.actionHistory.length - 3} earlier days
+                      </div>
+                    )}
+                  </div>
                 </div>
-              ) : (
-                <p className="pixel-text-sm text-[var(--pixel-text-dim)] text-center py-8">
-                  No history yet (Day 1)
-                </p>
               )}
 
-              {/* Yesterday's Errors */}
-              {playerInputs.yesterdaysErrors.length > 0 && (
-                <div className="mt-4 pixel-frame p-3 border-[var(--pixel-red)]">
-                  <h3 className="pixel-text-sm text-[var(--pixel-red)] mb-2">⚠ YESTERDAY&apos;S ISSUES</h3>
-                  <ul className="space-y-1">
-                    {playerInputs.yesterdaysErrors.map((error, i) => (
-                      <li key={i} className="pixel-text-sm text-[var(--pixel-red)]">
-                        • {error}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              {/* YESTERDAY'S MARKET */}
+              <div className="mb-4">
+                <h3 className="pixel-text-sm text-[var(--pixel-gold)] mb-2 border-b border-[var(--pixel-border)] pb-1">
+                  🏪 YESTERDAY&apos;S MARKET
+                </h3>
+                {playerInputs.historicMarkets.length > 0 ? (
+                  <div className="space-y-2">
+                    {Object.entries(playerInputs.historicMarkets[playerInputs.historicMarkets.length - 1] || {})
+                      .filter(([, info]) => (info as { totalOffered: number }).totalOffered > 0 || (info as { totalSold: number }).totalSold > 0)
+                      .map(([potionId, info]) => {
+                        const { totalOffered, totalSold, lowestPrice, highestPrice } = info as {
+                          totalOffered: number;
+                          totalSold: number;
+                          lowestPrice: number;
+                          highestPrice: number;
+                        };
+                        const tier = POTION_TIER_LOOKUP[potionId as PotionId];
+                        return (
+                          <div key={potionId} className="flex justify-between items-center pixel-text-sm">
+                            <span className={getTierColor(tier)}>
+                              {POTION_NAMES[potionId as PotionId]}
+                            </span>
+                            <span className="text-[var(--pixel-text-dim)]">
+                              {totalSold}/{totalOffered} @
+                              <span className="gold-display ml-1">
+                                {lowestPrice === highestPrice ? lowestPrice : `${lowestPrice}-${highestPrice}`}
+                              </span>
+                            </span>
+                          </div>
+                        );
+                      })}
+                  </div>
+                ) : (
+                  <p className="pixel-text-sm text-[var(--pixel-text-dim)] text-center py-2">
+                    No market data yet (Day 1)
+                  </p>
+                )}
+              </div>
+
+              {/* Yesterday's Errors - get from last day in action history */}
+              {(() => {
+                const lastDay = playerInputs.actionHistory[playerInputs.actionHistory.length - 1];
+                if (!lastDay || lastDay.errors.length === 0) return null;
+                return (
+                  <div className="pixel-frame p-3 border-[var(--pixel-red)]">
+                    <h3 className="pixel-text-sm text-[var(--pixel-red)] mb-2">⚠ YESTERDAY&apos;S ISSUES</h3>
+                    <ul className="space-y-1">
+                      {lastDay.errors.map((error: string, i: number) => (
+                        <li key={i} className="pixel-text-sm text-[var(--pixel-red)]">
+                          • {parseErrorString(error)}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })()}
             </div>
           )}
 

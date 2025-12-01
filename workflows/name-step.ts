@@ -12,6 +12,7 @@ const nameSchema = z.object({
 export type UsageData = {
   inputTokens: number;
   outputTokens: number;
+  reasoningTokens: number;
   totalTokens: number;
   durationMs: number;
 };
@@ -74,6 +75,7 @@ Respond ONLY with a json object containing the alchemistName. Example: {"alchemi
       usage: {
         inputTokens,
         outputTokens,
+        reasoningTokens: 0,
         totalTokens,
         durationMs,
       },
@@ -110,6 +112,7 @@ Respond ONLY with a json object containing the alchemistName. Example: {"alchemi
       usage: {
         inputTokens: err.usage?.inputTokens || 0,
         outputTokens: err.usage?.outputTokens || 0,
+        reasoningTokens: 0,
         totalTokens: err.usage?.totalTokens || 0,
         durationMs,
       },

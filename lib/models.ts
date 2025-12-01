@@ -82,6 +82,14 @@ export const AI_MODELS = [
     tier: 1,
   },
   {
+    id: "xai/grok-4-fast-reasoning",
+    name: "Grok 4 Fast Reasoning",
+    provider: "xAI",
+    input: 0.2,
+    output: 0.5,
+    tier: 1,
+  },
+  {
     id: "xai/grok-3-mini",
     name: "Grok 3 Mini",
     provider: "xAI",
@@ -96,6 +104,14 @@ export const AI_MODELS = [
     input: 3,
     output: 15,
     tier: 5,
+  },
+  {
+    id: "xai/grok-code-fast-1",
+    name: "Grok Code Fast 1",
+    provider: "xAI",
+    input: 0.2,
+    output: 1.5,
+    tier: 2,
   },
   {
     id: "google/gemini-3-pro-preview",
@@ -136,6 +152,14 @@ export const AI_MODELS = [
     input: 0.27,
     output: 0.4,
     tier: 1,
+  },
+  {
+    id: "moonshotai/kimi-k2-turbo",
+    name: "Kimi K2 Turbo",
+    provider: "MoonshotAI",
+    input: 2.4,
+    output: 10,
+    tier: 4,
   },
 ] as const;
 

@@ -488,9 +488,15 @@ export default function PlayerSetup({
                             {getStatusIcon(run.status)}
                           </span>
                           <span className="pixel-heading truncate">
-                            {run.playerNames.slice(0, 3).join(" vs ")}
-                            {run.playerNames.length > 3 &&
-                              ` +${run.playerNames.length - 3}`}
+                            {(() => {
+                              const names = run.players?.map(p => p.name) || run.playerNames || [];
+                              return (
+                                <>
+                                  {names.slice(0, 3).join(" vs ")}
+                                  {names.length > 3 && ` +${names.length - 3}`}
+                                </>
+                              );
+                            })()}
                           </span>
                         </div>
                         <div className="flex flex-wrap gap-x-4 gap-y-1">

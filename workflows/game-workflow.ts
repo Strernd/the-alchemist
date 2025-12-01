@@ -14,7 +14,7 @@ import {
 } from "@/lib/types";
 import { createHook, getWritable } from "workflow";
 import { aiPlayerStep } from "./ai-player-step";
-import { chooseAlchemistName, UsageData } from "./name-step";
+import { chooseAlchemistName, NameResult, UsageData } from "./name-step";
 
 // Calculate cost in USD from usage data and model pricing
 function calculateCost(modelId: string, usage: UsageData | undefined): number {
@@ -26,14 +26,22 @@ function calculateCost(modelId: string, usage: UsageData | undefined): number {
   }
 
   // Prices are per 1M tokens
+  // Reasoning/thinking tokens are priced at output rate
   const inputCost = (usage.inputTokens / 1_000_000) * model.input;
   const outputCost = (usage.outputTokens / 1_000_000) * model.output;
-  const total = inputCost + outputCost;
+  const reasoningCost =
+    ((usage.reasoningTokens || 0) / 1_000_000) * model.output;
+  const total = inputCost + outputCost + reasoningCost;
 
+  const reasoningStr = usage.reasoningTokens
+    ? ` + ${usage.reasoningTokens}reasoning*$${model.output}`
+    : "";
   console.log(
     `[Cost] ${modelId.split("/").pop()}: ${usage.inputTokens}in*$${
       model.input
-    } + ${usage.outputTokens}out*$${model.output} = $${total.toFixed(6)}`
+    } + ${usage.outputTokens}out*$${
+      model.output
+    }${reasoningStr} = $${total.toFixed(6)}`
   );
 
   return total;
@@ -49,6 +57,7 @@ function addUsage(
   return {
     inputTokens: stats.inputTokens + usage.inputTokens,
     outputTokens: stats.outputTokens + usage.outputTokens,
+    reasoningTokens: stats.reasoningTokens + (usage.reasoningTokens || 0),
     totalTokens: stats.totalTokens + usage.totalTokens,
     costUsd: stats.costUsd + costUsd,
     totalTimeMs: stats.totalTimeMs + usage.durationMs,
@@ -65,6 +74,7 @@ export async function gameWorkflow(config: GameConfig) {
     () => ({
       inputTokens: 0,
       outputTokens: 0,
+      reasoningTokens: 0,
       totalTokens: 0,
       costUsd: 0,
       totalTimeMs: 0,
@@ -91,10 +101,11 @@ export async function gameWorkflow(config: GameConfig) {
           usage: {
             inputTokens: 0,
             outputTokens: 0,
+            reasoningTokens: 0,
             totalTokens: 0,
             durationMs: 0,
           },
-        };
+        } as NameResult;
       }
       return chooseAlchemistName(player.model);
     })
@@ -151,76 +162,128 @@ export async function gameWorkflow(config: GameConfig) {
     console.log(`Starting day ${day} of ${updatedConfig.generation.days}`);
     const disqualifiedIdxs = new Set(disqualified.map((d) => d.playerIdx));
 
-    // Collect all player outputs for this day
-    const playerOutputs: PlayerOutputs[] = [];
+    // Prepare inputs for all players
+    const playerInputs = updatedConfig.runtime.players.map((_, idx) =>
+      getPlayerInputs(game, updatedConfig, day, gameState, idx)
+    );
 
-    for (let idx = 0; idx < updatedConfig.runtime.players.length; idx++) {
-      const player = updatedConfig.runtime.players[idx];
-      const isDisqualified = disqualifiedIdxs.has(idx);
-      const playerInput = getPlayerInputs(
-        game,
-        updatedConfig,
-        day,
-        gameState,
-        idx
+    // Check if there's a human player that needs input
+    const humanPlayerIdx = updatedConfig.runtime.players.findIndex(
+      (p, idx) => p.isHuman && !disqualifiedIdxs.has(idx)
+    );
+
+    // If there's a human player, handle them first (need to wait for their input)
+    let humanOutputs: PlayerOutputs | null = null;
+    if (humanPlayerIdx >= 0) {
+      const playerInput = playerInputs[humanPlayerIdx];
+      const hookToken = `${hookPrefix}:day${day}:player${humanPlayerIdx}`;
+
+      console.log(`[Game] Creating hook for human player ${humanPlayerIdx}`);
+      console.log(`[Game] Hook token: ${hookToken}`);
+
+      // Track start time for human player
+      const startTime = await getTimestamp();
+
+      // Create hook FIRST before streaming (so it exists when client tries to resume)
+      const hook = createHook<PlayerOutputs>({ token: hookToken });
+
+      // Stream state with waiting info so UI can show input form
+      const waitingState: GameState = {
+        ...gameState,
+        currentDay: day,
+        disqualifiedPlayers: disqualified,
+        playerUsageStats: [...playerUsageStats],
+        waitingForHuman: {
+          playerIdx: humanPlayerIdx,
+          hookToken,
+          playerInputs: playerInput,
+          herbPrices: game.herbDailyPrices[day - 1],
+        },
+      };
+      console.log(`[Game] Streaming waiting state to client...`);
+      await streamContentToClient(writable, waitingState);
+
+      console.log(`[Game] Waiting for human player ${humanPlayerIdx} input...`);
+      humanOutputs = await hook;
+
+      // Track end time and calculate duration
+      const endTime = await getTimestamp();
+      const durationMs = endTime - startTime;
+      console.log(
+        `[Game] Human player ${humanPlayerIdx} took ${(
+          durationMs / 1000
+        ).toFixed(1)}s`
       );
 
-      let outputs: PlayerOutputs;
+      // Add usage stats for human player (no tokens, just time)
+      playerUsageStats[humanPlayerIdx] = addUsage(
+        playerUsageStats[humanPlayerIdx],
+        {
+          inputTokens: 0,
+          outputTokens: 0,
+          reasoningTokens: 0,
+          totalTokens: 0,
+          durationMs,
+        },
+        0 // No cost for human
+      );
 
-      if (player.isHuman && !isDisqualified) {
-        // Human player: use a hook to wait for input
-        const hookToken = `${hookPrefix}:day${day}:player${idx}`;
-        console.log(`[Game] Creating hook for human player ${idx}`);
-        console.log(`[Game] Hook token: ${hookToken}`);
+      console.log(`[Game] Received human player ${humanPlayerIdx} input`);
+    }
 
-        // Track start time for human player
-        const startTime = await getTimestamp();
+    // Run all AI players in PARALLEL
+    console.log(
+      `[Game] Running ${updatedConfig.runtime.players.length} AI players in parallel...`
+    );
+    const aiStartTime = Date.now();
 
-        // Create hook FIRST before streaming (so it exists when client tries to resume)
-        const hook = createHook<PlayerOutputs>({ token: hookToken });
+    const playerPromises = updatedConfig.runtime.players.map(
+      async (player, idx) => {
+        const isDisqualified = disqualifiedIdxs.has(idx);
 
-        // Stream state with waiting info so UI can show input form
-        const waitingState: GameState = {
-          ...gameState,
-          currentDay: day,
-          disqualifiedPlayers: disqualified,
-          playerUsageStats: [...playerUsageStats],
-          waitingForHuman: {
-            playerIdx: idx,
-            hookToken,
-            playerInputs: playerInput,
-            herbPrices: game.herbDailyPrices[day - 1],
-          },
-        };
-        console.log(`[Game] Streaming waiting state to client...`);
-        await streamContentToClient(writable, waitingState);
+        // Human player - already handled above
+        if (player.isHuman && !isDisqualified) {
+          return { idx, outputs: humanOutputs!, result: null };
+        }
 
-        console.log(`[Game] Waiting for human player ${idx} input...`);
-        outputs = await hook;
+        // Disqualified player - empty outputs
+        if (isDisqualified) {
+          return {
+            idx,
+            outputs: {
+              buyHerbs: [],
+              makePotions: [],
+              potionOffers: [],
+            } as PlayerOutputs,
+            result: null,
+          };
+        }
 
-        // Track end time and calculate duration
-        const endTime = await getTimestamp();
-        const durationMs = endTime - startTime;
-        console.log(
-          `[Game] Human player ${idx} took ${(durationMs / 1000).toFixed(1)}s`
+        // AI player - run in parallel with others
+        const result = await aiPlayerStep(
+          playerInputs[idx],
+          player.model,
+          false
         );
+        return { idx, outputs: result.outputs, result };
+      }
+    );
 
-        // Add usage stats for human player (no tokens, just time)
-        playerUsageStats[idx] = addUsage(
-          playerUsageStats[idx],
-          { inputTokens: 0, outputTokens: 0, totalTokens: 0, durationMs },
-          0 // No cost for human
-        );
+    const results = await Promise.all(playerPromises);
+    console.log(
+      `[Game] All AI players completed in ${Date.now() - aiStartTime}ms`
+    );
 
-        console.log(`[Game] Received human player ${idx} input`);
-      } else if (isDisqualified) {
-        // Disqualified player: empty outputs
-        outputs = { buyHerbs: [], makePotions: [], potionOffers: [] };
-      } else {
-        // AI player: use aiPlayerStep
-        const result = await aiPlayerStep(playerInput, player.model, false);
+    // Process results and collect outputs in order
+    const playerOutputs: PlayerOutputs[] = [];
+    const playerReasonings: (string | undefined)[] = [];
+    for (const { idx, outputs, result } of results.sort(
+      (a, b) => a.idx - b.idx
+    )) {
+      const player = updatedConfig.runtime.players[idx];
 
-        // Accumulate usage (even for failed calls)
+      // Handle AI result (usage tracking, disqualification)
+      if (result) {
         if (result.usage) {
           const cost = calculateCost(player.model, result.usage);
           playerUsageStats[idx] = addUsage(
@@ -230,7 +293,6 @@ export async function gameWorkflow(config: GameConfig) {
           );
         }
 
-        // Log result status
         console.log(
           `[Game] Player ${idx} (${player.model.split("/").pop()}): success=${
             result.success
@@ -239,20 +301,26 @@ export async function gameWorkflow(config: GameConfig) {
           }ms`
         );
 
-        // If this step failed, disqualify the player for future rounds
         if (!result.success) {
           const reason = result.error || "Unknown error";
           console.log(`[Game] ⚠ Disqualifying player ${idx}: ${reason}`);
           disqualified.push({ playerIdx: idx, reason });
         }
 
-        outputs = result.outputs;
+        playerReasonings.push(result.reasoning);
+      } else {
+        playerReasonings.push(undefined);
       }
 
       playerOutputs.push(outputs);
     }
 
-    gameState = processGameDay(playerOutputs, gameState, game);
+    gameState = processGameDay(
+      playerOutputs,
+      gameState,
+      game,
+      playerReasonings
+    );
 
     // Update game state with latest disqualification and usage stats (clear waiting state)
     gameState = {

@@ -16,6 +16,7 @@ import {
   PlayerDayActions,
   RECIPES,
 } from "@/lib/types";
+import { parseErrorString } from "@/lib/format-utils";
 import { GamePhase } from "@/lib/hooks/use-game-stream";
 import HumanPlayerUI from "./HumanPlayerUI";
 
@@ -363,6 +364,9 @@ function OverviewView({
     costUsd: number;
     totalTimeMs: number;
     callCount: number;
+    // Disqualification
+    isDisqualified: boolean;
+    disqualificationReason?: string;
   }[];
   daysCompleted: number;
   totalDays: number;
@@ -696,13 +700,47 @@ function PlayerDayView({
   playerIdx: number;
   actions: PlayerDayActions;
 }) {
+  const [showReasoning, setShowReasoning] = useState(false);
   const profitLoss = actions.endInventory.gold - actions.startInventory.gold;
 
   return (
     <div className={`pixel-frame p-4 player-bg-${playerIdx}`} style={{ borderColor: `var(--player-${playerIdx + 1})` }}>
-      <h2 className={`pixel-heading player-color-${playerIdx} mb-4`}>
-        📋 {player.name}&apos;s DAY
-      </h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className={`pixel-heading player-color-${playerIdx}`}>
+          📋 {player.name}&apos;s DAY
+        </h2>
+        {actions.reasoning && (
+          <button
+            onClick={() => setShowReasoning(true)}
+            className="pixel-btn text-xs"
+            title="View AI reasoning"
+          >
+            🧠 REASONING
+          </button>
+        )}
+      </div>
+
+      {/* Reasoning Modal */}
+      {showReasoning && actions.reasoning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80">
+          <div className="pixel-frame-gold max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-[var(--pixel-border)]">
+              <h3 className="pixel-heading">🧠 AI Reasoning - {player.name}</h3>
+              <button
+                onClick={() => setShowReasoning(false)}
+                className="pixel-btn text-xs"
+              >
+                ✕ CLOSE
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto">
+              <pre className="pixel-text-sm whitespace-pre-wrap text-[var(--pixel-text)] font-mono bg-[var(--pixel-dark)] p-4 rounded border border-[var(--pixel-border)]">
+                {actions.reasoning}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Start Inventory */}
@@ -741,7 +779,7 @@ function PlayerDayView({
           {actions.errors.filter(e => e.includes("gold") || e.includes("buy")).length > 0 && (
             <div className="mt-2 text-[var(--pixel-red)] pixel-text-sm">
               {actions.errors.filter(e => e.includes("gold") || e.includes("buy")).map((e, i) => (
-                <p key={i}>⚠ {e}</p>
+                <p key={i}>⚠ {parseErrorString(e)}</p>
               ))}
             </div>
           )}
@@ -758,7 +796,7 @@ function PlayerDayView({
                     {make.qty}x {POTION_NAMES[make.potionId]}
                   </span>
                   <span className="text-[var(--pixel-text-dim)]">
-                    ({RECIPES[make.potionId].map(h => HERB_NAMES[h].split(" ")[0]).join(" + ")})
+                    ({RECIPES[make.potionId].map(h => HERB_NAMES[h]).join(" + ")})
                   </span>
                 </div>
               ))}
@@ -769,7 +807,7 @@ function PlayerDayView({
           {actions.errors.filter(e => e.includes("herbs to make")).length > 0 && (
             <div className="mt-2 text-[var(--pixel-red)] pixel-text-sm">
               {actions.errors.filter(e => e.includes("herbs to make")).map((e, i) => (
-                <p key={i}>⚠ {e}</p>
+                <p key={i}>⚠ {parseErrorString(e)}</p>
               ))}
             </div>
           )}
@@ -803,7 +841,7 @@ function PlayerDayView({
           {actions.errors.filter(e => e.includes("potions to sell")).length > 0 && (
             <div className="mt-2 text-[var(--pixel-red)] pixel-text-sm">
               {actions.errors.filter(e => e.includes("potions to sell")).map((e, i) => (
-                <p key={i}>⚠ {e}</p>
+                <p key={i}>⚠ {parseErrorString(e)}</p>
               ))}
             </div>
           )}
@@ -946,7 +984,7 @@ function InventoryPanel({
             {herbsWithQty.map(([herbId, qty]) => (
               <div key={herbId} className="flex justify-between pixel-text-sm text-[var(--pixel-text-dim)]">
                 <span className={`tier-${getTierForHerb(herbId as HerbId).charAt(1)} truncate`}>
-                  {HERB_NAMES[herbId as HerbId].split(" ")[0]}
+                  {HERB_NAMES[herbId as HerbId]}
                 </span>
                 <span>×{qty}</span>
               </div>
@@ -968,7 +1006,7 @@ function InventoryPanel({
             {potionsWithQty.map(([potionId, qty]) => (
               <div key={potionId} className="flex justify-between pixel-text-sm text-[var(--pixel-text-dim)]">
                 <span className={`tier-${getTierForPotion(potionId as PotionId).charAt(1)} truncate`}>
-                  {POTION_NAMES[potionId as PotionId].replace("Potion of ", "").replace("Minor ", "Min ").replace("Greater ", "Grt ")}
+                  {POTION_NAMES[potionId as PotionId]}
                 </span>
                 <span>×{qty}</span>
               </div>

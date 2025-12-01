@@ -64,6 +64,8 @@ export type PlayerDayActions = {
     price: number;
     revenue: number;
   }[];
+  // AI reasoning (if available) - shows the model's thought process
+  reasoning?: string;
 };
 
 export type DayRecord = {
@@ -78,6 +80,7 @@ export type DayRecord = {
 export type PlayerUsageStats = {
   inputTokens: number;
   outputTokens: number;
+  reasoningTokens: number;
   totalTokens: number;
   costUsd: number;
   totalTimeMs: number;
@@ -159,20 +162,39 @@ export const playerOutputsSchema = z.object({
 
 export type PlayerOutputsSchema = z.infer<typeof playerOutputsSchema>;
 
+// Player's action history for a single day
+export type PlayerDayHistory = {
+  day: number;
+  herbPrices: Record<HerbId, number>;
+  goldStart: number;
+  goldEnd: number;
+  herbsBought: { herbId: HerbId; qty: number; cost: number }[];
+  potionsMade: { potionId: PotionId; qty: number }[];
+  sales: {
+    potionId: PotionId;
+    offered: number;
+    sold: number;
+    price: number;
+    revenue: number;
+  }[];
+  errors: string[];
+};
+
+// Market data for a single potion on a single day
+export type PotionMarketData = {
+  totalOffered: number; // Total qty offered by all players
+  totalSold: number; // How many were actually sold
+  lowestPrice: number; // Lowest price that sold
+  highestPrice: number; // Highest price that sold
+};
+
 export type PlayerInputs = {
   inventory: PlayerInventory;
   dailyPrices: Record<HerbId, number>;
-  historicDemands: Record<
-    PotionId,
-    {
-      fulfilled: number;
-      remaining: number;
-      highestPrice: number;
-      lowestPrice: number;
-    }
-  >[];
-  yesterdaysErrors: string[];
-  yesterdaysExecutedOffers: PotionOffer[];
+  // Market data for each day (what happened in the market)
+  historicMarkets: Record<PotionId, PotionMarketData>[];
+  // Player's own action history (all previous days)
+  actionHistory: PlayerDayHistory[];
   meta: {
     playCount: number;
     totalDays: number;

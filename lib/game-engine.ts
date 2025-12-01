@@ -54,21 +54,56 @@ export function getPlayerInputs(
   gameState: GameState,
   playerIdx: number
 ): PlayerInputs {
-  // TODO: get market data
   const dayIndex = day - 1;
-  const previousMarket =
-    dayIndex > 0 ? gameState.processedMarketByDay[dayIndex - 1] : undefined;
+
+  // Build action history from day records
+  const actionHistory: PlayerInputs["actionHistory"] = [];
+  for (const record of gameState.dayRecords || []) {
+    const playerActions = record.playerActions[playerIdx];
+    if (!playerActions) continue;
+
+    actionHistory.push({
+      day: record.day,
+      herbPrices: record.herbPrices,
+      goldStart: playerActions.startInventory.gold,
+      goldEnd: playerActions.endInventory.gold,
+      herbsBought: playerActions.actualBuyHerbs,
+      potionsMade: playerActions.actualMakePotions,
+      sales: playerActions.salesResults,
+      errors: playerActions.errors,
+    });
+  }
+
+  // Build historic market data with total offered counts
+  const historicMarkets = gameState.processedMarketByDay.map((market) => {
+    const result: Record<PotionId, PlayerInputs["historicMarkets"][0][PotionId]> = 
+      {} as Record<PotionId, PlayerInputs["historicMarkets"][0][PotionId]>;
+
+    // Calculate total offered per potion from processedOffers
+    const offeredByPotion: Record<string, number> = {};
+    for (const offer of market.processedOffers) {
+      offeredByPotion[offer.potionId] = 
+        (offeredByPotion[offer.potionId] || 0) + offer.qty;
+    }
+
+    // Combine with potionInformation
+    for (const [potionId, info] of Object.entries(market.potionInformation)) {
+      result[potionId as PotionId] = {
+        totalOffered: offeredByPotion[potionId] || 0,
+        totalSold: info.fulfilled,
+        lowestPrice: info.lowestPrice,
+        highestPrice: info.highestPrice,
+      };
+    }
+
+    return result;
+  });
+
   return {
     inventory: gameState.playerInventories[playerIdx],
     dailyPrices: game.herbDailyPrices[dayIndex],
-    historicDemands: gameState.processedMarketByDay.map(
-      (processedMarket) => processedMarket.potionInformation
-    ),
-    yesterdaysErrors: gameState.lastDayErrorsByPlayer[playerIdx] || [],
-    yesterdaysExecutedOffers:
-      previousMarket?.processedOffers.filter(
-        (offer) => offer.playerIdx === playerIdx
-      ) || [],
+    historicMarkets,
+    actionHistory,
     meta: {
       playCount: config.runtime.players.length,
       totalDays: config.generation.days,
@@ -80,7 +115,8 @@ export function getPlayerInputs(
 export function processGameDay(
   playerOutputs: PlayerOutputs[],
   gameState: GameState,
-  game: Game
+  game: Game,
+  playerReasonings?: (string | undefined)[]
 ): GameState {
   const dayIndex = gameState.currentDay - 1;
   const herbPrices = game.herbDailyPrices[dayIndex];
@@ -132,6 +168,7 @@ export function processGameDay(
       errors,
       endInventory: inventory, // Will be updated after market
       salesResults: [], // Will be populated after market
+      reasoning: playerReasonings?.[idx],
     });
   });
 

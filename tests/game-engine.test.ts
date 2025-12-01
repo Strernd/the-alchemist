@@ -144,8 +144,8 @@ describe("game engine", () => {
     const inputs = getPlayerInputs(game, config, 1, state, 0);
 
     expect(inputs.dailyPrices).toEqual(game.herbDailyPrices[0]);
-    expect(inputs.historicDemands).toEqual([]);
-    expect(inputs.yesterdaysExecutedOffers).toEqual([]);
+    expect(inputs.historicMarkets).toEqual([]);
+    expect(inputs.actionHistory).toEqual([]);
     expect(inputs.meta.currentDay).toBe(1);
   });
 
@@ -172,16 +172,41 @@ describe("game engine", () => {
       ],
       potionInformation: basePotionInfo,
     });
-    state.lastDayErrorsByPlayer = [["oops"]];
+
+    // Add a day record with player actions
+    state.dayRecords = [
+      {
+        day: 1,
+        herbPrices: mockGame.herbDailyPrices[0],
+        potionDemands: mockGame.potionDailyDemands[0],
+        playerActions: [
+          {
+            startInventory: { gold: 100, herbs: {} as any, potions: {} as any },
+            requestedBuyHerbs: [],
+            requestedMakePotions: [],
+            requestedOffers: [],
+            actualBuyHerbs: [{ herbId: "H01", qty: 2, cost: 20 }],
+            actualMakePotions: [],
+            actualOffers: [],
+            errors: ["oops"],
+            endInventory: { gold: 80, herbs: { H01: 2 } as any, potions: {} as any },
+            salesResults: [],
+          },
+        ],
+        marketSummary: state.processedMarketByDay[0],
+      },
+    ];
 
     const inputs = getPlayerInputs(mockGame, config, 2, state, 0);
 
     expect(inputs.dailyPrices).toEqual(mockGame.herbDailyPrices[1]);
-    expect(inputs.historicDemands).toHaveLength(1);
-    expect(inputs.yesterdaysExecutedOffers).toEqual(
-      state.processedMarketByDay[0].processedOffers
-    );
-    expect(inputs.yesterdaysErrors).toEqual(["oops"]);
+    expect(inputs.historicMarkets).toHaveLength(1);
+    // Check that market data includes totalOffered (from processedOffers qty)
+    expect(inputs.historicMarkets[0].P01.totalOffered).toBe(3);
+    expect(inputs.historicMarkets[0].P01.totalSold).toBe(2);
+    expect(inputs.actionHistory).toHaveLength(1);
+    expect(inputs.actionHistory[0].day).toBe(1);
+    expect(inputs.actionHistory[0].errors).toEqual(["oops"]);
   });
 
   it("sanitizePlayerOutputs enforces costs and inventory limits", () => {

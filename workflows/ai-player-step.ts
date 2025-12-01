@@ -8,11 +8,11 @@ import {
 import { generateObject } from "ai";
 import { UsageData } from "./name-step";
 import {
+  formatActionHistory,
+  formatHistoricalHerbPrices,
   formatInventory,
-  getCraftableWithCurrentHerbs,
-  getCraftingOpportunities,
+  formatYesterdayMarket,
   PLAYER_SYSTEM_PROMPT,
-  summarizeDemand,
 } from "./prompts";
 
 export type PlayerStepResult = {
@@ -20,6 +20,7 @@ export type PlayerStepResult = {
   success: boolean;
   error?: string;
   usage?: UsageData;
+  reasoning?: string; // AI's reasoning/thinking process if available
 };
 
 const EMPTY_OUTPUTS: PlayerOutputs = {
@@ -40,54 +41,39 @@ export async function aiPlayerStep(
     return { outputs: EMPTY_OUTPUTS, success: true };
   }
 
-  const craftableNow = getCraftableWithCurrentHerbs(inputs.inventory.herbs);
-  const craftingOpps = getCraftingOpportunities(
-    inputs.inventory.gold,
-    inputs.dailyPrices,
-    inputs.inventory.herbs
-  );
-
-  const existingPotions = Object.entries(inputs.inventory.potions)
-    .filter(([, qty]) => qty > 0)
-    .map(([id, qty]) => `${id}:${qty}`)
-    .join(", ");
+  // Build action history section
+  const historySection = formatActionHistory(inputs.actionHistory, 3);
 
   const userPrompt = `Day ${inputs.meta.currentDay}/${
     inputs.meta.totalDays
-  } | ${inputs.meta.playCount} players | ${inputs.inventory.gold}g
-
-INVENTORY: ${formatInventory(inputs.inventory)}
-
-CRAFTING (cost sorted):
-${craftingOpps}
-
-POTIONS TO SELL: ${existingPotions || "None"}
-CRAFTABLE NOW: ${craftableNow}
-
-MARKET: ${summarizeDemand(inputs.historicDemands)}
-${
-  inputs.yesterdaysErrors.length > 0
-    ? `ERRORS: ${inputs.yesterdaysErrors.join("; ")}`
-    : ""
-}
-${
-  inputs.yesterdaysExecutedOffers.length > 0
-    ? `SALES: ${inputs.yesterdaysExecutedOffers
-        .map((o) => `${o.potionId}:${o.actuallySold}/${o.qty}@${o.price}g`)
-        .join(", ")}`
-    : ""
-}
+  } | ${inputs.meta.playCount} players competing
 ${
   inputs.meta.currentDay === inputs.meta.totalDays
-    ? "FINAL DAY - sell everything!"
+    ? "\n⚠ FINAL DAY - sell everything! Unsold inventory has no value after the game ends.\n"
     : ""
 }
+=== YOUR INVENTORY ===
+What you currently own. Use this to decide what to buy, craft, and sell.
+${formatInventory(inputs.inventory)}
+
+=== HERB PRICES ===
+Price history for each herb. Format: past prices → today's price. Use this to spot good deals.
+${formatHistoricalHerbPrices(inputs.actionHistory, inputs.dailyPrices)}
+
+=== YOUR PAST DECISIONS ===
+Your actions from previous days and their results. Learn from what worked and what didn't.
+${historySection || "Day 1 - no history yet"}
+
+=== YESTERDAY'S MARKET ===
+Trading activity for ALL potions yesterday. Shows total offered by all players, how many sold, and price range of sales.
+${formatYesterdayMarket(inputs.historicMarkets)}
 `;
 
   const startTime = Date.now();
+  console.log(userPrompt);
 
   try {
-    const { object, usage } = await generateObject({
+    const { object, usage, reasoning } = await generateObject({
       model: modelId,
       schema: playerOutputsSchema,
       system: PLAYER_SYSTEM_PROMPT,
@@ -101,18 +87,35 @@ ${
     // AI SDK LanguageModelV2Usage has inputTokens/outputTokens
     const inputTokens = usage?.inputTokens || 0;
     const outputTokens = usage?.outputTokens || 0;
+    // Reasoning tokens are included in some models (like o1, Claude thinking)
+    const reasoningTokens =
+      (usage as { reasoningTokens?: number })?.reasoningTokens || 0;
     const totalTokens = usage?.totalTokens || inputTokens + outputTokens;
 
     console.log(
-      `[Step] ${modelId} day ${inputs.meta.currentDay}: ${durationMs}ms, ${inputTokens}in/${outputTokens}out tokens`
+      `[Step] ${modelId} day ${
+        inputs.meta.currentDay
+      }: ${durationMs}ms, ${inputTokens}in/${outputTokens}out${
+        reasoningTokens ? `/${reasoningTokens}reasoning` : ""
+      } tokens`
     );
+    if (reasoning) {
+      console.log(
+        `[Step] Reasoning (${reasoning.length} chars): ${reasoning.slice(
+          0,
+          200
+        )}...`
+      );
+    }
 
     return {
       outputs: sanitized,
       success: true,
+      reasoning: reasoning || undefined,
       usage: {
         inputTokens,
         outputTokens,
+        reasoningTokens,
         totalTokens,
         durationMs,
       },
@@ -155,6 +158,7 @@ ${
       usage: {
         inputTokens: err.usage?.inputTokens || 0,
         outputTokens: err.usage?.outputTokens || 0,
+        reasoningTokens: 0,
         totalTokens: err.usage?.totalTokens || 0,
         durationMs,
       },

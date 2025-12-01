@@ -2,12 +2,16 @@ import { PlayerOutputs, playerOutputsSchema } from "@/lib/types";
 import { resumeHook } from "workflow/api";
 
 export async function POST(request: Request) {
+  let hookToken: string | undefined;
+  
   try {
     const body = await request.json();
-    const { hookToken, outputs } = body as {
+    const parsed = body as {
       hookToken: string;
       outputs: PlayerOutputs;
     };
+    hookToken = parsed.hookToken;
+    const outputs = parsed.outputs;
 
     if (!hookToken) {
       return Response.json({ error: "Missing hookToken" }, { status: 400 });
@@ -18,19 +22,19 @@ export async function POST(request: Request) {
     }
 
     // Validate the outputs against the schema
-    const parsed = playerOutputsSchema.safeParse(outputs);
-    if (!parsed.success) {
+    const validatedOutputs = playerOutputsSchema.safeParse(outputs);
+    if (!validatedOutputs.success) {
       return Response.json(
-        { error: "Invalid outputs", details: parsed.error.errors },
+        { error: "Invalid outputs", details: validatedOutputs.error.issues },
         { status: 400 }
       );
     }
 
     // Resume the workflow hook with the player's outputs
     console.log(`[API] Resuming hook ${hookToken}`);
-    console.log(`[API] Outputs:`, JSON.stringify(parsed.data, null, 2));
+    console.log(`[API] Outputs:`, JSON.stringify(validatedOutputs.data, null, 2));
     
-    const result = await resumeHook(hookToken, parsed.data);
+    const result = await resumeHook(hookToken, validatedOutputs.data);
 
     console.log(`[API] Hook resumed successfully, runId: ${result.runId}`);
     return Response.json({
