@@ -32,6 +32,7 @@ export type Player = {
   name: string;
   model: string;
   isHuman?: boolean; // If true, this player is controlled by a human via UI
+  strategyPrompt?: string; // Custom strategy prompt to guide AI decision-making
 };
 
 export type Game = {

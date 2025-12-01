@@ -373,6 +373,9 @@ function OverviewView({
   phase: GamePhase;
   onViewDetails: (playerIdx: number) => void;
 }) {
+  // State for strategy popover
+  const [showStrategyFor, setShowStrategyFor] = useState<number | null>(null);
+  
   // Calculate totals for summary
   const totalCost = playerStats.reduce((s, p) => s + p.costUsd, 0);
   const totalTokens = playerStats.reduce((s, p) => s + p.totalTokens, 0);
@@ -437,7 +440,21 @@ function OverviewView({
                 {pos + 1}
               </span>
               <div className="flex-1 min-w-0">
-                <div className={`pixel-text player-color-${stats.playerIdx}`}>{stats.player.name}</div>
+                <div className="flex items-center gap-2">
+                  <span className={`pixel-text player-color-${stats.playerIdx}`}>{stats.player.name}</span>
+                  {stats.player.strategyPrompt && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowStrategyFor(showStrategyFor === stats.playerIdx ? null : stats.playerIdx);
+                      }}
+                      className="text-sm hover:scale-110 transition-transform"
+                      title="View strategy"
+                    >
+                      🧠
+                    </button>
+                  )}
+                </div>
                 <div className="pixel-text-sm text-[var(--pixel-text-dim)] truncate">{stats.player.model.split("/").pop()}</div>
               </div>
               <div className="text-right">
@@ -447,6 +464,30 @@ function OverviewView({
                 </div>
               </div>
             </div>
+
+            {/* Strategy Popover */}
+            {showStrategyFor === stats.playerIdx && stats.player.strategyPrompt && (
+              <div 
+                className="mb-4 pixel-frame p-3 bg-[var(--pixel-dark)] border-[var(--pixel-purple-bright)]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="pixel-text-sm text-[var(--pixel-purple-bright)]">🧠 STRATEGY</span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowStrategyFor(null);
+                    }}
+                    className="pixel-text-sm text-[var(--pixel-text-dim)] hover:text-[var(--pixel-text)]"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <p className="pixel-text-sm text-[var(--pixel-text)] whitespace-pre-wrap">
+                  {stats.player.strategyPrompt}
+                </p>
+              </div>
+            )}
 
             {/* Stats Grid */}
             <div className="grid grid-cols-3 gap-2 text-center">
@@ -701,6 +742,7 @@ function PlayerDayView({
   actions: PlayerDayActions;
 }) {
   const [showReasoning, setShowReasoning] = useState(false);
+  const [showStrategy, setShowStrategy] = useState(false);
   const profitLoss = actions.endInventory.gold - actions.startInventory.gold;
 
   return (
@@ -709,16 +751,49 @@ function PlayerDayView({
         <h2 className={`pixel-heading player-color-${playerIdx}`}>
           📋 {player.name}&apos;s DAY
         </h2>
-        {actions.reasoning && (
-          <button
-            onClick={() => setShowReasoning(true)}
-            className="pixel-btn text-xs"
-            title="View AI reasoning"
-          >
-            🧠 REASONING
-          </button>
-        )}
+        <div className="flex gap-2">
+          {player.strategyPrompt && (
+            <button
+              onClick={() => setShowStrategy(true)}
+              className="pixel-btn text-xs"
+              title="View strategy prompt"
+            >
+              🧠 STRATEGY
+            </button>
+          )}
+          {actions.reasoning && (
+            <button
+              onClick={() => setShowReasoning(true)}
+              className="pixel-btn text-xs"
+              title="View AI reasoning"
+            >
+              💭 REASONING
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Strategy Modal */}
+      {showStrategy && player.strategyPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80">
+          <div className="pixel-frame-gold max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-[var(--pixel-border)]">
+              <h3 className="pixel-heading">🧠 Strategy - {player.name}</h3>
+              <button
+                onClick={() => setShowStrategy(false)}
+                className="pixel-btn text-xs"
+              >
+                ✕ CLOSE
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto">
+              <p className="pixel-text whitespace-pre-wrap text-[var(--pixel-text)]">
+                {player.strategyPrompt}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Reasoning Modal */}
       {showReasoning && actions.reasoning && (

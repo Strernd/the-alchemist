@@ -1,6 +1,7 @@
 "use client";
 
 import { RunInfo } from "@/lib/hooks/use-game-stream";
+import { useStrategies, Strategy } from "@/lib/hooks/use-strategies";
 import { AI_MODELS, AIModel } from "@/lib/models";
 import { Player } from "@/lib/types";
 import { useState } from "react";
@@ -22,6 +23,7 @@ type PlayerSlot = {
   modelId: string;
   isHuman: boolean;
   humanName: string;
+  strategyId: string; // ID of assigned strategy, empty for none
 };
 
 const PLAYER_SPRITES = ["⚗️", "🧪", "🔮", "⚡", "🌿", "💎"];
@@ -34,18 +36,24 @@ export default function PlayerSetup({
   loadingRuns,
 }: PlayerSetupProps) {
   const [playerSlots, setPlayerSlots] = useState<PlayerSlot[]>([
-    { enabled: true, modelId: "human", isHuman: true, humanName: "" }, // Default: Player 1 is human
-    { enabled: true, modelId: AI_MODELS[0].id, isHuman: false, humanName: "" },
-    { enabled: false, modelId: AI_MODELS[3].id, isHuman: false, humanName: "" },
-    { enabled: false, modelId: AI_MODELS[5].id, isHuman: false, humanName: "" },
-    { enabled: false, modelId: AI_MODELS[1].id, isHuman: false, humanName: "" },
-    { enabled: false, modelId: AI_MODELS[2].id, isHuman: false, humanName: "" },
+    { enabled: true, modelId: "human", isHuman: true, humanName: "", strategyId: "" },
+    { enabled: true, modelId: AI_MODELS[0].id, isHuman: false, humanName: "", strategyId: "" },
+    { enabled: false, modelId: AI_MODELS[3].id, isHuman: false, humanName: "", strategyId: "" },
+    { enabled: false, modelId: AI_MODELS[5].id, isHuman: false, humanName: "", strategyId: "" },
+    { enabled: false, modelId: AI_MODELS[1].id, isHuman: false, humanName: "", strategyId: "" },
+    { enabled: false, modelId: AI_MODELS[2].id, isHuman: false, humanName: "", strategyId: "" },
   ]);
   const [seed, setSeed] = useState("");
   const [days, setDays] = useState(5);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [activeTab, setActiveTab] = useState<"new" | "history">("new");
+  const [activeTab, setActiveTab] = useState<"new" | "history" | "strategies">("new");
   const [showRules, setShowRules] = useState(false);
+
+  // Strategy management
+  const { strategies, addStrategy, updateStrategy, deleteStrategy, getStrategy } = useStrategies();
+  const [editingStrategy, setEditingStrategy] = useState<Strategy | null>(null);
+  const [newStrategyName, setNewStrategyName] = useState("");
+  const [newStrategyPrompt, setNewStrategyPrompt] = useState("");
 
   const enabledCount = playerSlots.filter((p) => p.enabled).length;
 
@@ -75,13 +83,50 @@ export default function PlayerSetup({
           };
         }
         const model = AI_MODELS.find((m) => m.id === slot.modelId)!;
+        const strategy = slot.strategyId ? getStrategy(slot.strategyId) : undefined;
         return {
           name: model.name,
           model: slot.modelId,
           isHuman: false,
+          strategyPrompt: strategy?.prompt,
         };
       });
     onStartGame(players, { seed: seed || undefined, days });
+  };
+
+  const setPlayerStrategy = (index: number, strategyId: string) => {
+    const newSlots = [...playerSlots];
+    newSlots[index].strategyId = strategyId;
+    setPlayerSlots(newSlots);
+  };
+
+  const handleAddStrategy = () => {
+    if (newStrategyName.trim() && newStrategyPrompt.trim()) {
+      addStrategy(newStrategyName, newStrategyPrompt);
+      setNewStrategyName("");
+      setNewStrategyPrompt("");
+    }
+  };
+
+  const handleUpdateStrategy = () => {
+    if (editingStrategy && newStrategyName.trim() && newStrategyPrompt.trim()) {
+      updateStrategy(editingStrategy.id, { name: newStrategyName, prompt: newStrategyPrompt });
+      setEditingStrategy(null);
+      setNewStrategyName("");
+      setNewStrategyPrompt("");
+    }
+  };
+
+  const startEditStrategy = (strategy: Strategy) => {
+    setEditingStrategy(strategy);
+    setNewStrategyName(strategy.name);
+    setNewStrategyPrompt(strategy.prompt);
+  };
+
+  const cancelEditStrategy = () => {
+    setEditingStrategy(null);
+    setNewStrategyName("");
+    setNewStrategyPrompt("");
   };
 
   const setHumanName = (index: number, name: string) => {
@@ -186,6 +231,14 @@ export default function PlayerSetup({
           }`}
         >
           ⚔ NEW GAME
+        </button>
+        <button
+          onClick={() => setActiveTab("strategies")}
+          className={`pixel-btn ${
+            activeTab === "strategies" ? "pixel-btn-primary" : ""
+          }`}
+        >
+          🧠 STRATEGIES {strategies.length > 0 && `(${strategies.length})`}
         </button>
         <button
           onClick={() => setActiveTab("history")}
@@ -323,28 +376,44 @@ export default function PlayerSetup({
                         </div>
                       </div>
                     ) : (
-                      <div className="flex items-center justify-between">
-                        <span className="pixel-text-sm text-[var(--pixel-text-dim)]">
-                          {
-                            AI_MODELS.find((m) => m.id === slot.modelId)
-                              ?.provider
-                          }
-                        </span>
-                        <span
-                          className={`pixel-text-sm ${getPricingStyle(
-                            AI_MODELS.find((m) => m.id === slot.modelId)
-                              ?.tier || 1
-                          )}`}
-                          title={`Tier ${
-                            AI_MODELS.find((m) => m.id === slot.modelId)
-                              ?.tier || 1
-                          }/5`}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="pixel-text-sm text-[var(--pixel-text-dim)]">
+                            {
+                              AI_MODELS.find((m) => m.id === slot.modelId)
+                                ?.provider
+                            }
+                          </span>
+                          <span
+                            className={`pixel-text-sm ${getPricingStyle(
+                              AI_MODELS.find((m) => m.id === slot.modelId)
+                                ?.tier || 1
+                            )}`}
+                            title={`Tier ${
+                              AI_MODELS.find((m) => m.id === slot.modelId)
+                                ?.tier || 1
+                            }/5`}
+                          >
+                            {getPricingDisplay(
+                              AI_MODELS.find((m) => m.id === slot.modelId)
+                                ?.tier || 1
+                            )}
+                          </span>
+                        </div>
+                        {/* Strategy Selector */}
+                        <select
+                          value={slot.strategyId}
+                          onChange={(e) => setPlayerStrategy(index, e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="pixel-select w-full text-xs"
                         >
-                          {getPricingDisplay(
-                            AI_MODELS.find((m) => m.id === slot.modelId)
-                              ?.tier || 1
-                          )}
-                        </span>
+                          <option value="">🧠 No Strategy</option>
+                          {strategies.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              🧠 {s.name}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     )}
                   </>
@@ -445,6 +514,127 @@ export default function PlayerSetup({
             OVER {days} DAY{days !== 1 ? "S" : ""} OF TRADING
           </p>
         </>
+      ) : activeTab === "strategies" ? (
+        /* Strategies Tab */
+        <div className="w-full max-w-3xl">
+          <div className="pixel-frame p-4">
+            <h2 className="pixel-heading text-center mb-4">
+              🧠 STRATEGY PROMPTS
+            </h2>
+            <p className="pixel-text-sm text-[var(--pixel-text-dim)] text-center mb-4">
+              Create custom strategies to guide AI decision-making
+            </p>
+
+            {/* Add/Edit Strategy Form */}
+            <div className="pixel-frame p-4 mb-4">
+              <h3 className="pixel-text-sm text-[var(--pixel-gold)] mb-3">
+                {editingStrategy ? "✏️ EDIT STRATEGY" : "➕ NEW STRATEGY"}
+              </h3>
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  value={newStrategyName}
+                  onChange={(e) => setNewStrategyName(e.target.value)}
+                  placeholder="Strategy name (e.g., Aggressive Pricing)"
+                  className="pixel-input w-full"
+                  maxLength={50}
+                />
+                <textarea
+                  value={newStrategyPrompt}
+                  onChange={(e) => setNewStrategyPrompt(e.target.value)}
+                  placeholder="Strategy instructions (e.g., Focus on T3 potions. Undercut competitors by 10%. Never hold inventory overnight...)"
+                  className="pixel-input w-full h-32 resize-none"
+                  maxLength={1000}
+                />
+                <div className="flex gap-2">
+                  {editingStrategy ? (
+                    <>
+                      <button
+                        onClick={handleUpdateStrategy}
+                        disabled={!newStrategyName.trim() || !newStrategyPrompt.trim()}
+                        className="pixel-btn pixel-btn-primary flex-1"
+                      >
+                        ✓ SAVE CHANGES
+                      </button>
+                      <button
+                        onClick={cancelEditStrategy}
+                        className="pixel-btn"
+                      >
+                        ✗ CANCEL
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={handleAddStrategy}
+                      disabled={!newStrategyName.trim() || !newStrategyPrompt.trim()}
+                      className="pixel-btn pixel-btn-primary w-full"
+                    >
+                      + ADD STRATEGY
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Strategy List */}
+            {strategies.length === 0 ? (
+              <div className="text-center py-8">
+                <div className="text-4xl mb-4">📝</div>
+                <p className="pixel-text text-[var(--pixel-text-dim)]">
+                  No strategies yet
+                </p>
+                <p className="pixel-text-sm text-[var(--pixel-text-dim)] mt-2">
+                  Create a strategy above to customize AI behavior
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {strategies.map((strategy) => (
+                  <div
+                    key={strategy.id}
+                    className="pixel-frame p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="pixel-text font-bold truncate">
+                          🧠 {strategy.name}
+                        </h4>
+                      </div>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => startEditStrategy(strategy)}
+                          className="pixel-btn text-xs px-2 py-1"
+                          title="Edit"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={() => deleteStrategy(strategy.id)}
+                          className="pixel-btn text-xs px-2 py-1 hover:border-[var(--pixel-red)] hover:text-[var(--pixel-red)]"
+                          title="Delete"
+                        >
+                          ✗
+                        </button>
+                      </div>
+                    </div>
+                    <p className="pixel-text-sm text-[var(--pixel-text-dim)] whitespace-pre-wrap line-clamp-3">
+                      {strategy.prompt}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="text-center mt-6">
+            <button
+              onClick={() => setActiveTab("new")}
+              className="pixel-btn pixel-btn-primary"
+            >
+              ⚔ BACK TO GAME SETUP
+            </button>
+          </div>
+        </div>
       ) : (
         /* History Tab */
         <div className="w-full max-w-3xl">

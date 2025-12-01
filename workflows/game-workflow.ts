@@ -263,7 +263,8 @@ export async function gameWorkflow(config: GameConfig) {
         const result = await aiPlayerStep(
           playerInputs[idx],
           player.model,
-          false
+          false,
+          player.strategyPrompt
         );
         return { idx, outputs: result.outputs, result };
       }

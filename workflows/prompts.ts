@@ -9,7 +9,7 @@ import {
   RECIPES,
 } from "@/lib/types";
 
-export const PLAYER_SYSTEM_PROMPT = `You are an AI playing "The Alchemist", a potion trading game. Goal: end with the most gold.
+const BASE_SYSTEM_PROMPT = `You are an AI playing "The Alchemist", a potion trading game. Goal: end with the most gold.
 
 ## GAME FLOW (each day)
 1. BUY HERBS - spend gold on herbs at today's prices
@@ -42,6 +42,21 @@ Return JSON with three arrays. ONLY include items you actually want - omit items
 
 Use EMPTY ARRAYS [] if you have nothing for that action.
 `;
+
+// Build system prompt with optional strategy
+export function buildSystemPrompt(strategyPrompt?: string): string {
+  if (!strategyPrompt) {
+    return BASE_SYSTEM_PROMPT;
+  }
+  return `${BASE_SYSTEM_PROMPT}
+## YOUR STRATEGY
+Follow this trading strategy:
+${strategyPrompt}
+`;
+}
+
+// Default export for backwards compatibility
+export const PLAYER_SYSTEM_PROMPT = BASE_SYSTEM_PROMPT;
 
 export function formatInventory(inventory: PlayerInventory): string {
   const herbs = Object.entries(inventory.herbs)

@@ -8,11 +8,11 @@ import {
 import { generateObject } from "ai";
 import { UsageData } from "./name-step";
 import {
+  buildSystemPrompt,
   formatActionHistory,
   formatHistoricalHerbPrices,
   formatInventory,
   formatYesterdayMarket,
-  PLAYER_SYSTEM_PROMPT,
 } from "./prompts";
 
 export type PlayerStepResult = {
@@ -32,7 +32,8 @@ const EMPTY_OUTPUTS: PlayerOutputs = {
 export async function aiPlayerStep(
   inputs: PlayerInputs,
   modelId: string,
-  isDisqualified: boolean
+  isDisqualified: boolean,
+  strategyPrompt?: string
 ): Promise<PlayerStepResult> {
   "use step";
 
@@ -40,6 +41,9 @@ export async function aiPlayerStep(
   if (isDisqualified) {
     return { outputs: EMPTY_OUTPUTS, success: true };
   }
+
+  // Build system prompt with optional strategy
+  const systemPrompt = buildSystemPrompt(strategyPrompt);
 
   // Build action history section
   const historySection = formatActionHistory(inputs.actionHistory, 3);
@@ -76,7 +80,7 @@ ${formatYesterdayMarket(inputs.historicMarkets)}
     const { object, usage, reasoning } = await generateObject({
       model: modelId,
       schema: playerOutputsSchema,
-      system: PLAYER_SYSTEM_PROMPT,
+      system: systemPrompt,
       prompt: userPrompt,
       mode: "json",
     });
