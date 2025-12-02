@@ -4,7 +4,8 @@ import { RunInfo } from "@/lib/hooks/use-game-stream";
 import { useStrategies, Strategy } from "@/lib/hooks/use-strategies";
 import { AI_MODELS, AIModel } from "@/lib/models";
 import { Player } from "@/lib/types";
-import { useState } from "react";
+import { AccessCode, CuratedGame } from "@/lib/access-control";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import GameRulesModal from "./GameRulesModal";
 
 interface PlayerSetupProps {
@@ -16,6 +17,12 @@ interface PlayerSetupProps {
   onDeleteRun: (runId: string) => void;
   pastRuns: RunInfo[];
   loadingRuns: boolean;
+  accessCode: AccessCode | null;
+  remainingGames: number;
+  hasAccess: boolean;
+  isValidating: boolean;
+  onClearCode: () => void;
+  onValidateCode: (code: string) => Promise<boolean>;
 }
 
 type PlayerSlot = {
@@ -34,20 +41,184 @@ export default function PlayerSetup({
   onDeleteRun,
   pastRuns,
   loadingRuns,
+  accessCode,
+  remainingGames,
+  hasAccess,
+  isValidating,
+  onClearCode,
+  onValidateCode,
 }: PlayerSetupProps) {
+  // Access code entry state
+  const [codeInput, setCodeInput] = useState("");
+  const [codeError, setCodeError] = useState("");
+  const [isSubmittingCode, setIsSubmittingCode] = useState(false);
+
+  // Filter models based on access code tier
+  const maxTier = accessCode?.maxModelTier ?? 5;
+  const availableModels = useMemo(() => {
+    return AI_MODELS.filter((m) => m.tier <= maxTier);
+  }, [maxTier]);
+
+  // Get a valid default model for the tier
+  const defaultModelId = availableModels[0]?.id ?? AI_MODELS[0].id;
+
   const [playerSlots, setPlayerSlots] = useState<PlayerSlot[]>([
     { enabled: true, modelId: "human", isHuman: true, humanName: "", strategyId: "" },
-    { enabled: true, modelId: AI_MODELS[0].id, isHuman: false, humanName: "", strategyId: "" },
-    { enabled: false, modelId: AI_MODELS[3].id, isHuman: false, humanName: "", strategyId: "" },
-    { enabled: false, modelId: AI_MODELS[5].id, isHuman: false, humanName: "", strategyId: "" },
-    { enabled: false, modelId: AI_MODELS[1].id, isHuman: false, humanName: "", strategyId: "" },
-    { enabled: false, modelId: AI_MODELS[2].id, isHuman: false, humanName: "", strategyId: "" },
+    { enabled: true, modelId: defaultModelId, isHuman: false, humanName: "", strategyId: "" },
+    { enabled: false, modelId: defaultModelId, isHuman: false, humanName: "", strategyId: "" },
+    { enabled: false, modelId: defaultModelId, isHuman: false, humanName: "", strategyId: "" },
+    { enabled: false, modelId: defaultModelId, isHuman: false, humanName: "", strategyId: "" },
+    { enabled: false, modelId: defaultModelId, isHuman: false, humanName: "", strategyId: "" },
   ]);
+
+  const maxDays = accessCode?.maxDays ?? 30;
   const [seed, setSeed] = useState("");
   const [days, setDays] = useState(5);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [activeTab, setActiveTab] = useState<"new" | "history" | "strategies">("new");
+  const [activeTab, setActiveTab] = useState<"new" | "history" | "strategies" | "curated">("new");
   const [showRules, setShowRules] = useState(false);
+
+  // Curated games state
+  const [curatedGames, setCuratedGames] = useState<CuratedGame[]>([]);
+  const [loadingCurated, setLoadingCurated] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [addingToCurated, setAddingToCurated] = useState<string | null>(null);
+
+  // Check if user is admin
+  useEffect(() => {
+    fetch("/api/admin/login")
+      .then((res) => res.json())
+      .then((data) => setIsAdmin(data.authenticated))
+      .catch(() => setIsAdmin(false));
+  }, []);
+
+  // Fetch curated games
+  const fetchCuratedGames = useCallback(async () => {
+    setLoadingCurated(true);
+    try {
+      const res = await fetch("/api/curated-games");
+      const data = await res.json();
+      setCuratedGames(data.games || []);
+    } catch {
+      console.error("Failed to fetch curated games");
+    }
+    setLoadingCurated(false);
+  }, []);
+
+  // Load curated games on mount (so visitors without code can see them)
+  useEffect(() => {
+    fetchCuratedGames();
+  }, [fetchCuratedGames]);
+
+  // Default to curated tab for users without access (they can browse featured games)
+  useEffect(() => {
+    if (!hasAccess && !isValidating && activeTab === "new") {
+      setActiveTab("curated");
+    }
+  }, [hasAccess, isValidating, activeTab]);
+
+  // Add a game to curated list (admin only)
+  const addToCurated = async (run: RunInfo) => {
+    if (!isAdmin) return;
+    
+    const title = prompt("Enter a title for this curated game:", `Game ${run.seed}`);
+    if (!title) return;
+
+    const description = prompt("Enter a description (optional):", "");
+
+    setAddingToCurated(run.runId);
+    try {
+      const res = await fetch("/api/admin/curated-games", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          runId: run.runId,
+          seed: run.seed,
+          title,
+          description: description || undefined,
+          players: pastRuns.find(r => r.runId === run.runId)?.players || [],
+          totalDays: 5, // TODO: Get from run data
+          winner: undefined, // TODO: Get from run data
+        }),
+      });
+
+      if (res.ok) {
+        await fetchCuratedGames();
+        alert("Game added to curated list!");
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to add game");
+      }
+    } catch {
+      alert("Failed to add game to curated list");
+    }
+    setAddingToCurated(null);
+  };
+
+  // Remove from curated list (admin only)
+  const removeFromCurated = async (runId: string) => {
+    if (!isAdmin || !confirm("Remove this game from the curated list?")) return;
+
+    try {
+      const res = await fetch(`/api/admin/curated-games/${runId}`, { method: "DELETE" });
+      if (res.ok) {
+        setCuratedGames((prev) => prev.filter((g) => g.runId !== runId));
+      }
+    } catch {
+      alert("Failed to remove game");
+    }
+  };
+
+  // Load a curated game
+  const loadCuratedGame = (game: CuratedGame) => {
+    // Create a RunInfo-like object for loading
+    const runInfo: RunInfo = {
+      runId: game.runId,
+      seed: game.seed,
+      players: game.players,
+      createdAt: new Date(game.addedAt).toISOString(),
+      status: "completed",
+      completedAt: new Date(game.addedAt).toISOString(),
+    };
+    onLoadRun(runInfo);
+  };
+
+  // Update days when maxDays changes
+  useEffect(() => {
+    setDays((prev) => Math.min(prev, maxDays));
+  }, [maxDays]);
+
+  // Update player models when tier restriction changes
+  useEffect(() => {
+    setPlayerSlots((prev) =>
+      prev.map((slot) => {
+        if (slot.isHuman) return slot;
+        // If current model is above the allowed tier, reset to default
+        const currentModel = AI_MODELS.find((m) => m.id === slot.modelId);
+        if (currentModel && currentModel.tier > maxTier) {
+          return { ...slot, modelId: defaultModelId };
+        }
+        return slot;
+      })
+    );
+  }, [maxTier, defaultModelId]);
+
+  // Handle access code submission
+  const handleCodeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!codeInput.trim()) return;
+
+    setIsSubmittingCode(true);
+    setCodeError("");
+
+    const success = await onValidateCode(codeInput.trim());
+    if (!success) {
+      setCodeError("Invalid or exhausted access code");
+    } else {
+      setCodeInput("");
+    }
+    setIsSubmittingCode(false);
+  };
 
   // Strategy management
   const { strategies, addStrategy, updateStrategy, deleteStrategy, getStrategy } = useStrategies();
@@ -82,7 +253,11 @@ export default function PlayerSetup({
             isHuman: true,
           };
         }
-        const model = AI_MODELS.find((m) => m.id === slot.modelId)!;
+        const model = AI_MODELS.find((m) => m.id === slot.modelId);
+        if (!model) {
+          console.error(`Model not found: ${slot.modelId}`);
+          return { name: "Unknown", model: slot.modelId, isHuman: false };
+        }
         const strategy = slot.strategyId ? getStrategy(slot.strategyId) : undefined;
         return {
           name: model.name,
@@ -140,7 +315,7 @@ export default function PlayerSetup({
 
   const getModelsByProvider = () => {
     const providers: Record<string, AIModel[]> = {};
-    AI_MODELS.forEach((model) => {
+    availableModels.forEach((model) => {
       if (!providers[model.provider]) {
         providers[model.provider] = [];
       }
@@ -222,8 +397,73 @@ export default function PlayerSetup({
         </button>
       </div>
 
+      {/* Access Code Section */}
+      <div className="max-w-lg mx-auto mb-6">
+        {isValidating ? (
+          <div className="pixel-frame p-3 text-center">
+            <span className="pixel-text-sm text-[var(--pixel-text-dim)]">Validating access...</span>
+          </div>
+        ) : accessCode ? (
+          <div className="pixel-frame p-3 flex items-center justify-between">
+            <div className="flex items-center gap-4 flex-wrap">
+              <span className="pixel-text-sm">
+                🎫 <span className="text-[var(--pixel-gold)]">{accessCode.code}</span>
+              </span>
+              <span className="pixel-text-sm">
+                🎮 <span className={remainingGames > 0 ? "text-[var(--pixel-green-bright)]" : "text-[var(--pixel-red)]"}>
+                  {remainingGames} games left
+                </span>
+              </span>
+              <span className="pixel-text-sm">
+                💰 Tier ≤{accessCode.maxModelTier}
+              </span>
+              <span className="pixel-text-sm">
+                📅 ≤{accessCode.maxDays} days
+              </span>
+            </div>
+            <button
+              onClick={onClearCode}
+              className="pixel-btn text-xs"
+              title="Use different code"
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <div className="pixel-frame-gold p-4">
+            <p className="pixel-text-sm text-[var(--pixel-text-dim)] text-center mb-4">
+              Unfortunately games can easily cost a few cents to a few dollars, so access to starting games is restricted. 
+              You can inspect past, curated games below, or contact me to ask for a code.
+            </p>
+            <p className="pixel-text-sm text-center mb-3">
+              🎫 Enter an access code to start new games
+            </p>
+            <form onSubmit={handleCodeSubmit} className="flex gap-2">
+              <input
+                type="text"
+                value={codeInput}
+                onChange={(e) => setCodeInput(e.target.value.toUpperCase())}
+                placeholder="XXXX-XXXX"
+                className="pixel-input flex-1 text-center tracking-widest"
+                maxLength={9}
+              />
+              <button
+                type="submit"
+                disabled={isSubmittingCode || !codeInput.trim()}
+                className="pixel-btn pixel-btn-primary"
+              >
+                {isSubmittingCode ? "..." : "✓"}
+              </button>
+            </form>
+            {codeError && (
+              <p className="pixel-text-sm text-[var(--pixel-red)] text-center mt-2">{codeError}</p>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Tab Navigation */}
-      <div className="flex gap-2 mb-6">
+      <div className="flex gap-2 mb-6 flex-wrap justify-center">
         <button
           onClick={() => setActiveTab("new")}
           className={`pixel-btn ${
@@ -231,6 +471,14 @@ export default function PlayerSetup({
           }`}
         >
           ⚔ NEW GAME
+        </button>
+        <button
+          onClick={() => setActiveTab("curated")}
+          className={`pixel-btn ${
+            activeTab === "curated" ? "pixel-btn-primary" : ""
+          }`}
+        >
+          ⭐ FEATURED GAMES {curatedGames.length > 0 && `(${curatedGames.length})`}
         </button>
         <button
           onClick={() => setActiveTab("strategies")}
@@ -246,7 +494,7 @@ export default function PlayerSetup({
             activeTab === "history" ? "pixel-btn-primary" : ""
           }`}
         >
-          📜 HISTORY {pastRuns.length > 0 && `(${pastRuns.length})`}
+          📜 MY GAMES {pastRuns.length > 0 && `(${pastRuns.length})`}
         </button>
       </div>
 
@@ -451,7 +699,7 @@ export default function PlayerSetup({
                     <input
                       type="range"
                       min={1}
-                      max={20}
+                      max={Math.min(20, maxDays)}
                       value={days}
                       onChange={(e) => setDays(parseInt(e.target.value))}
                       className="flex-1"
@@ -459,7 +707,8 @@ export default function PlayerSetup({
                     <span className="pixel-text w-8 text-center">{days}</span>
                   </div>
                   <p className="pixel-text-sm text-[var(--pixel-text-dim)] mt-1">
-                    1-20 days of trading
+                    1-{Math.min(20, maxDays)} days of trading
+                    {maxDays < 20 && <span className="text-[var(--pixel-gold)]"> (code limit: {maxDays})</span>}
                   </p>
                 </div>
 
@@ -486,11 +735,17 @@ export default function PlayerSetup({
           {/* Start Button */}
           <button
             onClick={handleStart}
-            disabled={enabledCount < 1}
-            className="pixel-btn pixel-btn-primary text-sm lg:text-base px-8 lg:px-12 py-4 lg:py-6 pixel-pulse"
+            disabled={enabledCount < 1 || !hasAccess}
+            className={`pixel-btn pixel-btn-primary text-sm lg:text-base px-8 lg:px-12 py-4 lg:py-6 ${hasAccess ? "pixel-pulse" : "opacity-50"}`}
           >
-            ⚔ BEGIN TOURNAMENT ⚔
+            {hasAccess ? "⚔ BEGIN TOURNAMENT ⚔" : "🔒 ENTER CODE TO PLAY"}
           </button>
+
+          {!hasAccess && (
+            <p className="pixel-text-sm text-[var(--pixel-gold)] mt-2 text-center">
+              Enter an access code above to start new games
+            </p>
+          )}
 
           <p className="pixel-text-sm text-[var(--pixel-text-dim)] mt-4 text-center">
             {humanCount > 0 ? (
@@ -635,12 +890,135 @@ export default function PlayerSetup({
             </button>
           </div>
         </div>
+      ) : activeTab === "curated" ? (
+        /* Curated/Featured Games Tab */
+        <div className="w-full max-w-3xl">
+          <div className="pixel-frame p-4">
+            <h2 className="pixel-heading text-center mb-4">
+              ⭐ FEATURED GAMES
+            </h2>
+            <p className="pixel-text-sm text-[var(--pixel-text-dim)] text-center mb-4">
+              Watch exciting AI battles curated by the community
+            </p>
+
+            {loadingCurated ? (
+              <div className="text-center py-8">
+                <p className="pixel-text text-[var(--pixel-text-dim)]">
+                  Loading<span className="loading-dots"></span>
+                </p>
+              </div>
+            ) : curatedGames.length === 0 ? (
+              <div className="text-center py-8">
+                <div className="text-4xl mb-4">🎬</div>
+                <p className="pixel-text text-[var(--pixel-text-dim)]">
+                  No featured games yet
+                </p>
+                <p className="pixel-text-sm text-[var(--pixel-text-dim)] mt-2">
+                  Check back later for curated AI battles!
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {curatedGames.map((game) => (
+                  <div
+                    key={game.runId}
+                    className="pixel-frame p-4 hover:border-[var(--pixel-gold)] transition-colors cursor-pointer"
+                    onClick={() => loadCuratedGame(game)}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-[var(--pixel-gold)]">⭐</span>
+                          <span className="pixel-heading truncate">
+                            {game.title}
+                          </span>
+                        </div>
+                        {game.description && (
+                          <p className="pixel-text-sm text-[var(--pixel-text-dim)] mb-2">
+                            {game.description}
+                          </p>
+                        )}
+                        <div className="flex flex-wrap gap-x-4 gap-y-1">
+                          <span className="pixel-text-sm text-[var(--pixel-text-dim)]">
+                            {game.players.length} players
+                          </span>
+                          {game.winner && (
+                            <span className="pixel-text-sm text-[var(--pixel-green-bright)]">
+                              🏆 {game.winner}
+                            </span>
+                          )}
+                          <span className="pixel-text-sm text-[var(--pixel-text-dim)]">
+                            {game.totalDays} days
+                          </span>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {game.players.map((p, i) => (
+                            <span
+                              key={i}
+                              className={`pixel-text-sm px-2 py-1 rounded ${
+                                p.isHuman
+                                  ? "bg-[var(--pixel-green-bright)]/20 text-[var(--pixel-green-bright)]"
+                                  : "bg-[var(--pixel-mid)] text-[var(--pixel-text-dim)]"
+                              }`}
+                            >
+                              {p.name}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            loadCuratedGame(game);
+                          }}
+                          className="pixel-btn text-xs"
+                        >
+                          👁 WATCH
+                        </button>
+                        {isAdmin && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeFromCurated(game.runId);
+                            }}
+                            className="pixel-btn text-xs hover:border-[var(--pixel-red)] hover:text-[var(--pixel-red)]"
+                            title="Remove from featured"
+                          >
+                            ✗
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <button
+              onClick={fetchCuratedGames}
+              className="pixel-btn text-xs mt-4 mx-auto block"
+              disabled={loadingCurated}
+            >
+              🔄 REFRESH
+            </button>
+          </div>
+
+          <div className="text-center mt-6">
+            <button
+              onClick={() => setActiveTab("new")}
+              className="pixel-btn pixel-btn-primary"
+            >
+              ⚔ BACK TO GAME SETUP
+            </button>
+          </div>
+        </div>
       ) : (
         /* History Tab */
         <div className="w-full max-w-3xl">
           <div className="pixel-frame p-4">
             <h2 className="pixel-heading text-center mb-4">
-              📜 PAST TOURNAMENTS
+              📜 MY TOURNAMENTS
             </h2>
 
             {loadingRuns ? (
@@ -718,6 +1096,23 @@ export default function PlayerSetup({
                         >
                           {run.status === "running" ? "▶ VIEW" : "👁 REPLAY"}
                         </button>
+                        {isAdmin && run.status === "completed" && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              addToCurated(run);
+                            }}
+                            disabled={addingToCurated === run.runId || curatedGames.some(g => g.runId === run.runId)}
+                            className={`pixel-btn text-xs ${
+                              curatedGames.some(g => g.runId === run.runId)
+                                ? "opacity-50 cursor-not-allowed"
+                                : "hover:border-[var(--pixel-gold)] hover:text-[var(--pixel-gold)]"
+                            }`}
+                            title={curatedGames.some(g => g.runId === run.runId) ? "Already featured" : "Add to featured games"}
+                          >
+                            {addingToCurated === run.runId ? "..." : curatedGames.some(g => g.runId === run.runId) ? "⭐" : "☆"}
+                          </button>
+                        )}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -745,6 +1140,18 @@ export default function PlayerSetup({
           </div>
         </div>
       )}
+
+      {/* Footer */}
+      <div className="mt-12 mb-20 text-center">
+        <a
+          href="https://twitter.com/strehldev"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="pixel-text-sm text-[var(--pixel-text-dim)] hover:text-[var(--pixel-gold)] transition-colors"
+        >
+          Made by @strehldev
+        </a>
+      </div>
 
       {/* Decorative bottom border */}
       <div className="absolute bottom-8 left-0 right-0 h-4 bg-[var(--pixel-gold-dark)] opacity-20" />

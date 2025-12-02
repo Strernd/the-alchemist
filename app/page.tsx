@@ -3,9 +3,10 @@
 import { useGameStream } from "@/lib/hooks/use-game-stream";
 import PlayerSetup from "./components/PlayerSetup";
 import GameView from "./components/GameView";
+import { AccessProvider, useAccess } from "@/lib/contexts/access-context";
 import { Player } from "@/lib/types";
 
-export default function Home() {
+function GameContent() {
   const {
     phase,
     dayStates,
@@ -24,10 +25,22 @@ export default function Home() {
     submitHumanTurn,
   } = useGameStream();
 
-  const handleStartGame = (
+  const { accessCode, remainingGames, consumeGame, clearCode, validateCode, isValidating, hasAccess } = useAccess();
+
+  const handleStartGame = async (
     selectedPlayers: Player[],
     options?: { seed?: string; days?: number }
   ) => {
+    if (!hasAccess) {
+      console.error("No valid access code");
+      return;
+    }
+    // Consume a game from the access code
+    const consumed = await consumeGame();
+    if (!consumed) {
+      console.error("Failed to consume game from access code");
+      return;
+    }
     startGame(selectedPlayers, options);
   };
 
@@ -39,6 +52,12 @@ export default function Home() {
         onDeleteRun={deleteRun}
         pastRuns={pastRuns}
         loadingRuns={loadingRuns}
+        accessCode={accessCode}
+        remainingGames={remainingGames}
+        hasAccess={hasAccess}
+        isValidating={isValidating}
+        onClearCode={clearCode}
+        onValidateCode={validateCode}
       />
     );
   }
@@ -72,5 +91,13 @@ export default function Home() {
       onReset={reset}
       onSubmitHumanTurn={submitHumanTurn}
     />
+  );
+}
+
+export default function Home() {
+  return (
+    <AccessProvider>
+      <GameContent />
+    </AccessProvider>
   );
 }

@@ -19,6 +19,7 @@ export type StoredPlayer = {
   name: string;
   model: string;
   isHuman?: boolean;
+  strategyPrompt?: string;
 };
 
 export type StoredRun = {
@@ -160,6 +161,7 @@ export function useGameStream() {
             name: `Alchemist ${i + 1}`,
             model: p.model,
             isHuman: p.isHuman,
+            strategyPrompt: p.strategyPrompt,
           })),
           createdAt: new Date().toISOString(),
         });
@@ -199,6 +201,7 @@ export function useGameStream() {
         name: p.name,
         model: p.model,
         isHuman: p.isHuman,
+        strategyPrompt: p.strategyPrompt,
       }));
     } else if (storedRun.playerNames) {
       // Legacy format: just names
@@ -302,6 +305,7 @@ export function useGameStream() {
                       name: p.name,
                       model: p.model,
                       isHuman: p.isHuman,
+                      strategyPrompt: p.strategyPrompt,
                     })),
                     createdAt: new Date().toISOString(),
                   });
