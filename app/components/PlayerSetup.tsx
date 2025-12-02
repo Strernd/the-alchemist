@@ -4,7 +4,7 @@ import { RunInfo } from "@/lib/hooks/use-game-stream";
 import { useStrategies, Strategy } from "@/lib/hooks/use-strategies";
 import { AI_MODELS, AIModel } from "@/lib/models";
 import { Player } from "@/lib/types";
-import { AccessCode, CuratedGame } from "@/lib/access-control";
+import { AccessCode, CuratedGame, DefaultStrategy } from "@/lib/access-control";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import GameRulesModal from "./GameRulesModal";
 
@@ -24,6 +24,7 @@ interface PlayerSetupProps {
   onClearCode: () => void;
   onValidateCode: (code: string) => Promise<boolean>;
   initialCuratedGames: CuratedGame[];
+  initialDefaultStrategies: DefaultStrategy[];
 }
 
 type PlayerSlot = {
@@ -49,6 +50,7 @@ export default function PlayerSetup({
   onClearCode,
   onValidateCode,
   initialCuratedGames,
+  initialDefaultStrategies,
 }: PlayerSetupProps) {
   // Access code entry state
   const [codeInput, setCodeInput] = useState("");
@@ -213,13 +215,70 @@ export default function PlayerSetup({
       setCodeError("Invalid or exhausted access code");
     } else {
       setCodeInput("");
+      // Switch to new game tab after successful code validation
+      setActiveTab("new");
     }
     setIsSubmittingCode(false);
   };
 
   // Strategy management
-  const { strategies, addStrategy, updateStrategy, deleteStrategy, getStrategy } = useStrategies();
+  const {
+    strategies,
+    addStrategy,
+    updateStrategy,
+    deleteStrategy,
+    getStrategy,
+    refreshDefaultStrategies,
+  } = useStrategies(initialDefaultStrategies);
   const [editingStrategy, setEditingStrategy] = useState<Strategy | null>(null);
+
+  // Admin default strategy management
+  const [newDefaultStrategyName, setNewDefaultStrategyName] = useState("");
+  const [newDefaultStrategyPrompt, setNewDefaultStrategyPrompt] = useState("");
+  const [addingDefaultStrategy, setAddingDefaultStrategy] = useState(false);
+
+  const handleAddDefaultStrategy = async () => {
+    if (!isAdmin || !newDefaultStrategyName.trim() || !newDefaultStrategyPrompt.trim()) return;
+
+    setAddingDefaultStrategy(true);
+    try {
+      const res = await fetch("/api/admin/strategies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newDefaultStrategyName.trim(),
+          prompt: newDefaultStrategyPrompt.trim(),
+        }),
+      });
+
+      if (res.ok) {
+        setNewDefaultStrategyName("");
+        setNewDefaultStrategyPrompt("");
+        await refreshDefaultStrategies();
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to add default strategy");
+      }
+    } catch {
+      alert("Failed to add default strategy");
+    }
+    setAddingDefaultStrategy(false);
+  };
+
+  const handleDeleteDefaultStrategy = async (id: string) => {
+    if (!isAdmin || !confirm("Delete this default strategy? It will be removed for all users.")) return;
+
+    try {
+      const res = await fetch(`/api/admin/strategies/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        await refreshDefaultStrategies();
+      } else {
+        alert("Failed to delete default strategy");
+      }
+    } catch {
+      alert("Failed to delete default strategy");
+    }
+  };
   const [newStrategyName, setNewStrategyName] = useState("");
   const [newStrategyPrompt, setNewStrategyPrompt] = useState("");
 
@@ -828,6 +887,42 @@ export default function PlayerSetup({
               </div>
             </div>
 
+            {/* Admin: Add Default Strategy */}
+            {isAdmin && (
+              <div className="pixel-frame pixel-frame-gold p-4 mb-4">
+                <h3 className="pixel-text-sm text-[var(--pixel-gold)] mb-3">
+                  👑 ADMIN: ADD DEFAULT STRATEGY
+                </h3>
+                <p className="pixel-text-sm text-[var(--pixel-text-dim)] mb-3">
+                  Default strategies are available to all users
+                </p>
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    value={newDefaultStrategyName}
+                    onChange={(e) => setNewDefaultStrategyName(e.target.value)}
+                    placeholder="Strategy name"
+                    className="pixel-input w-full"
+                    maxLength={50}
+                  />
+                  <textarea
+                    value={newDefaultStrategyPrompt}
+                    onChange={(e) => setNewDefaultStrategyPrompt(e.target.value)}
+                    placeholder="Strategy instructions..."
+                    className="pixel-input w-full h-24 resize-none"
+                    maxLength={1000}
+                  />
+                  <button
+                    onClick={handleAddDefaultStrategy}
+                    disabled={!newDefaultStrategyName.trim() || !newDefaultStrategyPrompt.trim() || addingDefaultStrategy}
+                    className="pixel-btn pixel-btn-primary w-full"
+                  >
+                    {addingDefaultStrategy ? "Adding..." : "👑 ADD DEFAULT STRATEGY"}
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Strategy List */}
             {strategies.length === 0 ? (
               <div className="text-center py-8">
@@ -844,29 +939,45 @@ export default function PlayerSetup({
                 {strategies.map((strategy) => (
                   <div
                     key={strategy.id}
-                    className="pixel-frame p-4"
+                    className={`pixel-frame p-4 ${strategy.isDefault ? "border-[var(--pixel-gold)]" : ""}`}
                   >
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <div className="flex-1 min-w-0">
                         <h4 className="pixel-text font-bold truncate">
-                          🧠 {strategy.name}
+                          {strategy.isDefault ? "👑" : "🧠"} {strategy.name}
+                          {strategy.isDefault && (
+                            <span className="ml-2 text-xs text-[var(--pixel-gold)]">(DEFAULT)</span>
+                          )}
                         </h4>
                       </div>
                       <div className="flex gap-1">
-                        <button
-                          onClick={() => startEditStrategy(strategy)}
-                          className="pixel-btn text-xs px-2 py-1"
-                          title="Edit"
-                        >
-                          ✏️
-                        </button>
-                        <button
-                          onClick={() => deleteStrategy(strategy.id)}
-                          className="pixel-btn text-xs px-2 py-1 hover:border-[var(--pixel-red)] hover:text-[var(--pixel-red)]"
-                          title="Delete"
-                        >
-                          ✗
-                        </button>
+                        {/* Only show edit/delete for user strategies, or for admin on default strategies */}
+                        {!strategy.isDefault ? (
+                          <>
+                            <button
+                              onClick={() => startEditStrategy(strategy)}
+                              className="pixel-btn text-xs px-2 py-1"
+                              title="Edit"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              onClick={() => deleteStrategy(strategy.id)}
+                              className="pixel-btn text-xs px-2 py-1 hover:border-[var(--pixel-red)] hover:text-[var(--pixel-red)]"
+                              title="Delete"
+                            >
+                              ✗
+                            </button>
+                          </>
+                        ) : isAdmin ? (
+                          <button
+                            onClick={() => handleDeleteDefaultStrategy(strategy.id)}
+                            className="pixel-btn text-xs px-2 py-1 hover:border-[var(--pixel-red)] hover:text-[var(--pixel-red)]"
+                            title="Delete default strategy"
+                          >
+                            ✗
+                          </button>
+                        ) : null}
                       </div>
                     </div>
                     <p className="pixel-text-sm text-[var(--pixel-text-dim)] whitespace-pre-wrap line-clamp-3">

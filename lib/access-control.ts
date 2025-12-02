@@ -91,7 +91,25 @@ export function getCuratedGamesKey(): string {
   return `${KV_PREFIX}curated_games`;
 }
 
-// Server-side function to fetch curated games (for use in RSC)
+// Default strategies types and helpers
+export type DefaultStrategy = {
+  id: string;
+  name: string;
+  prompt: string;
+  createdAt: number;
+};
+
+export type DefaultStrategyInput = {
+  name: string;
+  prompt: string;
+};
+
+// KV key for default strategies
+export function getDefaultStrategiesKey(): string {
+  return `${KV_PREFIX}default_strategies`;
+}
+
+// Server-side functions (for use in RSC)
 import { kv } from "@vercel/kv";
 
 export async function getCuratedGames(): Promise<CuratedGame[]> {
@@ -100,6 +118,18 @@ export async function getCuratedGames(): Promise<CuratedGame[]> {
     return games || [];
   } catch (error) {
     console.error("Error fetching curated games:", error);
+    return [];
+  }
+}
+
+export async function getDefaultStrategies(): Promise<DefaultStrategy[]> {
+  try {
+    const strategies = await kv.get<DefaultStrategy[]>(
+      getDefaultStrategiesKey()
+    );
+    return strategies || [];
+  } catch (error) {
+    console.error("Error fetching default strategies:", error);
     return [];
   }
 }

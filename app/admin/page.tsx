@@ -73,6 +73,17 @@ export default function AdminPage() {
     }
   };
 
+  const handleResetSession = async () => {
+    try {
+      await fetch("/api/admin/login", { method: "DELETE" });
+      setIsAuthenticated(false);
+      setLoginError("");
+      setPassword("");
+    } catch {
+      console.error("Reset session failed");
+    }
+  };
+
   const loadCodes = useCallback(async () => {
     setIsLoadingCodes(true);
     setCodeError("");
@@ -191,10 +202,16 @@ export default function AdminPage() {
             </button>
           </form>
 
-          <div className="mt-6 text-center">
-            <a href="/" className="pixel-text-sm text-[var(--pixel-text-dim)] hover:text-[var(--pixel-gold)]">
+          <div className="mt-6 text-center space-y-3">
+            <a href="/" className="pixel-text-sm text-[var(--pixel-text-dim)] hover:text-[var(--pixel-gold)] block">
               ← Back to Game
             </a>
+            <button
+              onClick={handleResetSession}
+              className="pixel-text-sm text-[var(--pixel-text-dim)] hover:text-[var(--pixel-red)] underline"
+            >
+              🔄 Reset Session (if password changed)
+            </button>
           </div>
         </div>
       </div>
@@ -212,6 +229,9 @@ export default function AdminPage() {
             <a href="/" className="pixel-btn">
               🎮 GAME
             </a>
+            <button onClick={handleResetSession} className="pixel-btn" title="Clear session and re-login (use if password changed)">
+              🔄 RESET
+            </button>
             <button onClick={handleLogout} className="pixel-btn">
               🚪 LOGOUT
             </button>

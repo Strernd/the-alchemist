@@ -180,37 +180,50 @@ export function useGameStream() {
   );
 
   const loadExistingRun = useCallback(async (runInfo: RunInfo) => {
-    // Find the stored run to get player info
-    const storedRuns = getStoredRuns();
-    const storedRun = storedRuns.find((r) => r.runId === runInfo.runId);
-
-    if (!storedRun) {
-      setState((prev) => ({
-        ...prev,
-        phase: "error",
-        error: "Run not found in storage",
-      }));
-      return;
-    }
-
-    // Create Player objects from stored data (support both new and legacy format)
+    // Create Player objects from run info
+    // First try runInfo.players (curated games pass this directly)
+    // Then fall back to localStorage (user's own runs)
     let players: Player[];
-    if (storedRun.players) {
-      // New format with full player info
-      players = storedRun.players.map((p) => ({
+
+    if (runInfo.players && runInfo.players.length > 0) {
+      // Player data provided directly (e.g., from curated games)
+      players = runInfo.players.map((p) => ({
         name: p.name,
         model: p.model,
         isHuman: p.isHuman,
         strategyPrompt: p.strategyPrompt,
       }));
-    } else if (storedRun.playerNames) {
-      // Legacy format: just names
-      players = storedRun.playerNames.map((name) => ({
-        name,
-        model: "unknown",
-      }));
     } else {
-      players = [];
+      // Fall back to localStorage for user's own runs
+      const storedRuns = getStoredRuns();
+      const storedRun = storedRuns.find((r) => r.runId === runInfo.runId);
+
+      if (!storedRun) {
+        setState((prev) => ({
+          ...prev,
+          phase: "error",
+          error: "Run not found in storage",
+        }));
+        return;
+      }
+
+      if (storedRun.players) {
+        // New format with full player info
+        players = storedRun.players.map((p) => ({
+          name: p.name,
+          model: p.model,
+          isHuman: p.isHuman,
+          strategyPrompt: p.strategyPrompt,
+        }));
+      } else if (storedRun.playerNames) {
+        // Legacy format: just names
+        players = storedRun.playerNames.map((name) => ({
+          name,
+          model: "unknown",
+        }));
+      } else {
+        players = [];
+      }
     }
 
     setState((prev) => ({

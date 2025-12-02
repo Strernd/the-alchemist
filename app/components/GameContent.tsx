@@ -1,6 +1,6 @@
 "use client";
 
-import { CuratedGame } from "@/lib/access-control";
+import { CuratedGame, DefaultStrategy } from "@/lib/access-control";
 import { useAccess } from "@/lib/contexts/access-context";
 import { useGameStream } from "@/lib/hooks/use-game-stream";
 import { Player } from "@/lib/types";
@@ -9,9 +9,13 @@ import PlayerSetup from "./PlayerSetup";
 
 interface GameContentProps {
   initialCuratedGames: CuratedGame[];
+  initialDefaultStrategies: DefaultStrategy[];
 }
 
-export default function GameContent({ initialCuratedGames }: GameContentProps) {
+export default function GameContent({
+  initialCuratedGames,
+  initialDefaultStrategies,
+}: GameContentProps) {
   const {
     phase,
     dayStates,
@@ -72,6 +76,7 @@ export default function GameContent({ initialCuratedGames }: GameContentProps) {
         onClearCode={clearCode}
         onValidateCode={validateCode}
         initialCuratedGames={initialCuratedGames}
+        initialDefaultStrategies={initialDefaultStrategies}
       />
     );
   }
