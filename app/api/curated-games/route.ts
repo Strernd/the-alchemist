@@ -2,10 +2,7 @@ import { CuratedGame, getCuratedGamesKey } from "@/lib/access-control";
 import { kv } from "@vercel/kv";
 import { NextResponse } from "next/server";
 
-// Configure caching - revalidate every 6 hours
-export const revalidate = 60 * 60 * 6;
-
-// GET - Public endpoint to list curated games (cached)
+// GET - Public endpoint to list curated games (cached via Cache-Control headers)
 export async function GET() {
   try {
     const games = (await kv.get<CuratedGame[]>(getCuratedGamesKey())) || [];

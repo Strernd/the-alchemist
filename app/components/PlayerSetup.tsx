@@ -23,6 +23,7 @@ interface PlayerSetupProps {
   isValidating: boolean;
   onClearCode: () => void;
   onValidateCode: (code: string) => Promise<boolean>;
+  initialCuratedGames: CuratedGame[];
 }
 
 type PlayerSlot = {
@@ -47,6 +48,7 @@ export default function PlayerSetup({
   isValidating,
   onClearCode,
   onValidateCode,
+  initialCuratedGames,
 }: PlayerSetupProps) {
   // Access code entry state
   const [codeInput, setCodeInput] = useState("");
@@ -78,8 +80,8 @@ export default function PlayerSetup({
   const [activeTab, setActiveTab] = useState<"new" | "history" | "strategies" | "curated">("new");
   const [showRules, setShowRules] = useState(false);
 
-  // Curated games state
-  const [curatedGames, setCuratedGames] = useState<CuratedGame[]>([]);
+  // Curated games state - initialized from RSC props
+  const [curatedGames, setCuratedGames] = useState<CuratedGame[]>(initialCuratedGames);
   const [loadingCurated, setLoadingCurated] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [addingToCurated, setAddingToCurated] = useState<string | null>(null);
@@ -92,7 +94,7 @@ export default function PlayerSetup({
       .catch(() => setIsAdmin(false));
   }, []);
 
-  // Fetch curated games
+  // Fetch curated games (for manual refresh)
   const fetchCuratedGames = useCallback(async () => {
     setLoadingCurated(true);
     try {
@@ -104,11 +106,6 @@ export default function PlayerSetup({
     }
     setLoadingCurated(false);
   }, []);
-
-  // Load curated games on mount (so visitors without code can see them)
-  useEffect(() => {
-    fetchCuratedGames();
-  }, [fetchCuratedGames]);
 
   // Default to curated tab for users without access (they can browse featured games)
   useEffect(() => {

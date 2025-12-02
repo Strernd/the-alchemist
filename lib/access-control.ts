@@ -1,7 +1,7 @@
 // Access control types and utilities
 
 // Prefix for all KV keys to namespace our data
-export const KV_PREFIX = 'thealchemist:';
+export const KV_PREFIX = "thealchemist:";
 
 export type ModelTier = 1 | 2 | 3 | 4 | 5;
 
@@ -31,8 +31,8 @@ export type AccessValidation = {
 
 // Generate a random access code
 export function generateAccessCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No I, O, 0, 1 to avoid confusion
-  let code = '';
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // No I, O, 0, 1 to avoid confusion
+  let code = "";
   for (let i = 0; i < 8; i++) {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
   }
@@ -42,7 +42,9 @@ export function generateAccessCode(): string {
 
 // Get KV key for an access code
 export function getCodeKey(code: string): string {
-  return `${KV_PREFIX}access_code:${code.toUpperCase().replace(/[^A-Z0-9]/g, '')}`;
+  return `${KV_PREFIX}access_code:${code
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")}`;
 }
 
 // Get the pattern for listing all access codes
@@ -52,7 +54,7 @@ export function getCodePattern(): string {
 
 // Normalize code input (uppercase, remove non-alphanumeric except dash)
 export function normalizeCode(code: string): string {
-  return code.toUpperCase().replace(/[^A-Z0-9-]/g, '');
+  return code.toUpperCase().replace(/[^A-Z0-9-]/g, "");
 }
 
 // Curated games types and helpers
@@ -89,3 +91,15 @@ export function getCuratedGamesKey(): string {
   return `${KV_PREFIX}curated_games`;
 }
 
+// Server-side function to fetch curated games (for use in RSC)
+import { kv } from "@vercel/kv";
+
+export async function getCuratedGames(): Promise<CuratedGame[]> {
+  try {
+    const games = await kv.get<CuratedGame[]>(getCuratedGamesKey());
+    return games || [];
+  } catch (error) {
+    console.error("Error fetching curated games:", error);
+    return [];
+  }
+}

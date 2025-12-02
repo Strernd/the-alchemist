@@ -1,103 +1,17 @@
-"use client";
+import { AccessProvider } from "@/lib/contexts/access-context";
+import { getCuratedGames } from "@/lib/access-control";
+import GameContent from "./components/GameContent";
 
-import { useGameStream } from "@/lib/hooks/use-game-stream";
-import PlayerSetup from "./components/PlayerSetup";
-import GameView from "./components/GameView";
-import { AccessProvider, useAccess } from "@/lib/contexts/access-context";
-import { Player } from "@/lib/types";
+// Revalidate curated games every 6 hours (ISR)
+export const revalidate = 60 * 60 * 6;
 
-function GameContent() {
-  const {
-    phase,
-    dayStates,
-    players,
-    seed,
-    error,
-    daysCompleted,
-    totalDays,
-    pastRuns,
-    loadingRuns,
-    waitingForHuman,
-    startGame,
-    loadExistingRun,
-    deleteRun,
-    reset,
-    submitHumanTurn,
-  } = useGameStream();
+export default async function Home() {
+  // Fetch curated games on the server
+  const curatedGames = await getCuratedGames();
 
-  const { accessCode, remainingGames, consumeGame, clearCode, validateCode, isValidating, hasAccess } = useAccess();
-
-  const handleStartGame = async (
-    selectedPlayers: Player[],
-    options?: { seed?: string; days?: number }
-  ) => {
-    if (!hasAccess) {
-      console.error("No valid access code");
-      return;
-    }
-    // Consume a game from the access code
-    const consumed = await consumeGame();
-    if (!consumed) {
-      console.error("Failed to consume game from access code");
-      return;
-    }
-    startGame(selectedPlayers, options);
-  };
-
-  if (phase === "setup") {
-    return (
-      <PlayerSetup
-        onStartGame={handleStartGame}
-        onLoadRun={loadExistingRun}
-        onDeleteRun={deleteRun}
-        pastRuns={pastRuns}
-        loadingRuns={loadingRuns}
-        accessCode={accessCode}
-        remainingGames={remainingGames}
-        hasAccess={hasAccess}
-        isValidating={isValidating}
-        onClearCode={clearCode}
-        onValidateCode={validateCode}
-      />
-    );
-  }
-
-  if (phase === "error") {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-8 pixel-grid">
-        <div className="pixel-frame-gold p-8 text-center max-w-md">
-          <div className="text-6xl mb-4">💀</div>
-          <h2 className="pixel-title text-lg text-[var(--pixel-red)] mb-4">
-            A DARK FORCE INTERVENES
-          </h2>
-          <p className="pixel-text text-[var(--pixel-text-dim)] mb-6">{error}</p>
-          <button onClick={reset} className="pixel-btn pixel-btn-primary">
-            TRY AGAIN
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <GameView
-      dayStates={dayStates}
-      players={players}
-      phase={phase}
-      seed={seed}
-      daysCompleted={daysCompleted}
-      totalDays={totalDays}
-      waitingForHuman={waitingForHuman}
-      onReset={reset}
-      onSubmitHumanTurn={submitHumanTurn}
-    />
-  );
-}
-
-export default function Home() {
   return (
     <AccessProvider>
-      <GameContent />
+      <GameContent initialCuratedGames={curatedGames} />
     </AccessProvider>
   );
 }

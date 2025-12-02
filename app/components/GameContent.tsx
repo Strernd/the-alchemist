@@ -1,0 +1,102 @@
+"use client";
+
+import { useGameStream } from "@/lib/hooks/use-game-stream";
+import PlayerSetup from "./PlayerSetup";
+import GameView from "./GameView";
+import { useAccess } from "@/lib/contexts/access-context";
+import { Player } from "@/lib/types";
+import { CuratedGame } from "@/lib/access-control";
+
+interface GameContentProps {
+  initialCuratedGames: CuratedGame[];
+}
+
+export default function GameContent({ initialCuratedGames }: GameContentProps) {
+  const {
+    phase,
+    dayStates,
+    players,
+    seed,
+    error,
+    daysCompleted,
+    totalDays,
+    pastRuns,
+    loadingRuns,
+    waitingForHuman,
+    startGame,
+    loadExistingRun,
+    deleteRun,
+    reset,
+    submitHumanTurn,
+  } = useGameStream();
+
+  const { accessCode, remainingGames, consumeGame, clearCode, validateCode, isValidating, hasAccess } = useAccess();
+
+  const handleStartGame = async (
+    selectedPlayers: Player[],
+    options?: { seed?: string; days?: number }
+  ) => {
+    if (!hasAccess) {
+      console.error("No valid access code");
+      return;
+    }
+    // Consume a game from the access code
+    const consumed = await consumeGame();
+    if (!consumed) {
+      console.error("Failed to consume game from access code");
+      return;
+    }
+    startGame(selectedPlayers, options);
+  };
+
+  if (phase === "setup") {
+    return (
+      <PlayerSetup
+        onStartGame={handleStartGame}
+        onLoadRun={loadExistingRun}
+        onDeleteRun={deleteRun}
+        pastRuns={pastRuns}
+        loadingRuns={loadingRuns}
+        accessCode={accessCode}
+        remainingGames={remainingGames}
+        hasAccess={hasAccess}
+        isValidating={isValidating}
+        onClearCode={clearCode}
+        onValidateCode={validateCode}
+        initialCuratedGames={initialCuratedGames}
+      />
+    );
+  }
+
+  if (phase === "error") {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-8 pixel-grid">
+        <div className="pixel-frame-gold p-8 text-center max-w-md">
+          <div className="text-6xl mb-4">💀</div>
+          <h2 className="pixel-title text-lg text-[var(--pixel-red)] mb-4">
+            A DARK FORCE INTERVENES
+          </h2>
+          <p className="pixel-text text-[var(--pixel-text-dim)] mb-6">{error}</p>
+          <button onClick={reset} className="pixel-btn pixel-btn-primary">
+            TRY AGAIN
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <GameView
+      dayStates={dayStates}
+      players={players}
+      phase={phase}
+      seed={seed}
+      daysCompleted={daysCompleted}
+      totalDays={totalDays}
+      waitingForHuman={waitingForHuman}
+      onReset={reset}
+      onSubmitHumanTurn={submitHumanTurn}
+    />
+  );
+}
+
