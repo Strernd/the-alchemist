@@ -19,6 +19,7 @@ export default function AdminPage() {
     maxGames: 5,
     maxModelTier: 3,
     maxDays: 10,
+    maxPlayers: 6,
     note: "",
   });
   const [isCreating, setIsCreating] = useState(false);
@@ -126,7 +127,7 @@ export default function AdminPage() {
       }
 
       // Reset form and reload codes
-      setNewCode({ maxGames: 5, maxModelTier: 3, maxDays: 10, note: "" });
+      setNewCode({ maxGames: 5, maxModelTier: 3, maxDays: 10, maxPlayers: 6, note: "" });
       await loadCodes();
     } catch (err) {
       setCodeError(err instanceof Error ? err.message : "Failed to create code");
@@ -284,6 +285,18 @@ export default function AdminPage() {
               </div>
 
               <div>
+                <label className="pixel-text-sm block mb-2">Max Players</label>
+                <input
+                  type="number"
+                  value={newCode.maxPlayers}
+                  onChange={(e) => setNewCode({ ...newCode, maxPlayers: parseInt(e.target.value) || 2 })}
+                  className="pixel-input w-full"
+                  min={2}
+                  max={6}
+                />
+              </div>
+
+              <div>
                 <label className="pixel-text-sm block mb-2">Note (optional)</label>
                 <input
                   type="text"
@@ -354,7 +367,7 @@ export default function AdminPage() {
                             </button>
                           </div>
 
-                          <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div className="grid grid-cols-4 gap-2 text-xs">
                             <div className="pixel-text-sm">
                               <span className="text-[var(--pixel-text-dim)]">Games:</span>{" "}
                               <span className={isExhausted ? "text-[var(--pixel-red)]" : "text-[var(--pixel-green-bright)]"}>
@@ -368,6 +381,10 @@ export default function AdminPage() {
                             <div className="pixel-text-sm">
                               <span className="text-[var(--pixel-text-dim)]">Days:</span>{" "}
                               <span className="text-[var(--pixel-purple)]">≤{code.maxDays}</span>
+                            </div>
+                            <div className="pixel-text-sm">
+                              <span className="text-[var(--pixel-text-dim)]">Players:</span>{" "}
+                              <span className="text-[var(--pixel-blue)]">≤{code.maxPlayers ?? 6}</span>
                             </div>
                           </div>
 

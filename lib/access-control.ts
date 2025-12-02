@@ -10,6 +10,7 @@ export type AccessCode = {
   maxGames: number;
   maxModelTier: ModelTier;
   maxDays: number;
+  maxPlayers: number;
   usedGames: number;
   createdAt: number;
   note?: string;
@@ -19,6 +20,7 @@ export type AccessCodeCreateInput = {
   maxGames: number;
   maxModelTier: ModelTier;
   maxDays: number;
+  maxPlayers: number;
   note?: string;
 };
 

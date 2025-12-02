@@ -76,6 +76,7 @@ export default function PlayerSetup({
   ]);
 
   const maxDays = accessCode?.maxDays ?? 30;
+  const maxPlayers = accessCode?.maxPlayers ?? 6;
   const [seed, setSeed] = useState("");
   const [days, setDays] = useState(5);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -286,10 +287,32 @@ export default function PlayerSetup({
 
   const togglePlayer = (index: number) => {
     const newSlots = [...playerSlots];
+    // Don't disable if it's the last enabled player
     if (newSlots[index].enabled && enabledCount <= 1) return;
+    // Don't enable if already at max players
+    if (!newSlots[index].enabled && enabledCount >= maxPlayers) return;
     newSlots[index].enabled = !newSlots[index].enabled;
     setPlayerSlots(newSlots);
   };
+
+  // Enforce maxPlayers limit when it changes
+  useEffect(() => {
+    setPlayerSlots((prev) => {
+      const enabled = prev.filter((p) => p.enabled).length;
+      if (enabled <= maxPlayers) return prev;
+      
+      // Disable players from the end until we're at the limit
+      let toDisable = enabled - maxPlayers;
+      const newSlots = [...prev];
+      for (let i = newSlots.length - 1; i >= 0 && toDisable > 0; i--) {
+        if (newSlots[i].enabled) {
+          newSlots[i] = { ...newSlots[i], enabled: false };
+          toDisable--;
+        }
+      }
+      return newSlots;
+    });
+  }, [maxPlayers]);
 
   const setPlayerModel = (index: number, modelId: string) => {
     const newSlots = [...playerSlots];
@@ -476,6 +499,9 @@ export default function PlayerSetup({
               <span className="pixel-text-sm">
                 📅 ≤{accessCode.maxDays} days
               </span>
+              <span className="pixel-text-sm">
+                👥 ≤{accessCode.maxPlayers ?? 6} players
+              </span>
             </div>
             <button
               onClick={onClearCode}
@@ -581,12 +607,12 @@ export default function PlayerSetup({
             {playerSlots.map((slot, index) => (
               <div
                 key={index}
-                onClick={() => !slot.enabled && togglePlayer(index)}
+                onClick={() => !slot.enabled && enabledCount < maxPlayers && togglePlayer(index)}
                 className={`
-                  pixel-frame p-4 lg:p-6 transition-opacity cursor-pointer
-                  ${
-                    slot.enabled ? "opacity-100" : "opacity-40 hover:opacity-60"
-                  }
+                  pixel-frame p-4 lg:p-6 transition-opacity
+                  ${slot.enabled ? "opacity-100" : "opacity-40"}
+                  ${!slot.enabled && enabledCount < maxPlayers ? "cursor-pointer hover:opacity-60" : ""}
+                  ${!slot.enabled && enabledCount >= maxPlayers ? "cursor-not-allowed" : ""}
                   ${slot.enabled ? `player-bg-${index}` : ""}
                 `}
                 style={{
@@ -625,7 +651,7 @@ export default function PlayerSetup({
                           : "bg-[var(--pixel-green)] border-[var(--pixel-green-bright)] hover:bg-[var(--pixel-green-bright)]"
                       }
                     `}
-                    disabled={slot.enabled && enabledCount <= 1}
+                    disabled={(slot.enabled && enabledCount <= 1) || (!slot.enabled && enabledCount >= maxPlayers)}
                   >
                     {slot.enabled ? "−" : "+"}
                   </button>

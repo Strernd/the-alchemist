@@ -53,6 +53,9 @@ export async function POST(request: NextRequest) {
     if (!input.maxDays || input.maxDays < 1) {
       return NextResponse.json({ error: 'maxDays must be at least 1' }, { status: 400 });
     }
+    if (!input.maxPlayers || input.maxPlayers < 2 || input.maxPlayers > 6) {
+      return NextResponse.json({ error: 'maxPlayers must be 2-6' }, { status: 400 });
+    }
     
     // Generate unique code
     let code: string;
@@ -73,6 +76,7 @@ export async function POST(request: NextRequest) {
       maxGames: input.maxGames,
       maxModelTier: input.maxModelTier,
       maxDays: input.maxDays,
+      maxPlayers: input.maxPlayers,
       usedGames: 0,
       createdAt: Date.now(),
       note: input.note,

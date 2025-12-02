@@ -8,6 +8,8 @@ import {
 import { isAdminAuthenticated } from "@/lib/admin-auth";
 import { revalidatePath } from "next/cache";
 
+const MAX_STRATEGY_LENGTH = 1000;
+
 // GET - List all default strategies (admin only)
 export async function GET(request: NextRequest) {
   if (!(await isAdminAuthenticated(request))) {
@@ -43,13 +45,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Enforce max strategy length
+    const prompt = input.prompt.trim().slice(0, MAX_STRATEGY_LENGTH);
+
     const strategies =
       (await kv.get<DefaultStrategy[]>(getDefaultStrategiesKey())) || [];
 
     const newStrategy: DefaultStrategy = {
       id: `default-${Date.now()}`,
-      name: input.name.trim(),
-      prompt: input.prompt.trim(),
+      name: input.name.trim().slice(0, 100),
+      prompt,
       createdAt: Date.now(),
     };
 

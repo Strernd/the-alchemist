@@ -8,6 +8,8 @@ import {
 import { isAdminAuthenticated } from "@/lib/admin-auth";
 import { revalidatePath } from "next/cache";
 
+const MAX_STRATEGY_LENGTH = 1000;
+
 // PUT - Update a default strategy (admin only)
 export async function PUT(
   request: NextRequest,
@@ -33,10 +35,11 @@ export async function PUT(
     }
 
     if (input.name !== undefined) {
-      strategies[index].name = input.name.trim();
+      strategies[index].name = input.name.trim().slice(0, 100);
     }
     if (input.prompt !== undefined) {
-      strategies[index].prompt = input.prompt.trim();
+      // Enforce max strategy length
+      strategies[index].prompt = input.prompt.trim().slice(0, MAX_STRATEGY_LENGTH);
     }
 
     await kv.set(getDefaultStrategiesKey(), strategies);
