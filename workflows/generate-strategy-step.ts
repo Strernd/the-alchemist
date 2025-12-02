@@ -97,6 +97,8 @@ Consider:
 4. How could you better predict demand and manage inventory?
 5. Any specific tactics for early/mid/late game?
 
+This should be formulated more as a general strategy than a very detailed guide, as you won't have any context of this game when you're playing the next game.
+
 Write a clear, actionable strategy (2-4 paragraphs) that you would follow in the next game.
 Focus on specific, concrete actions rather than vague principles.`;
 
