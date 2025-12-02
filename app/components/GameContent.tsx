@@ -1,11 +1,11 @@
 "use client";
 
-import { useGameStream } from "@/lib/hooks/use-game-stream";
-import PlayerSetup from "./PlayerSetup";
-import GameView from "./GameView";
-import { useAccess } from "@/lib/contexts/access-context";
-import { Player } from "@/lib/types";
 import { CuratedGame } from "@/lib/access-control";
+import { useAccess } from "@/lib/contexts/access-context";
+import { useGameStream } from "@/lib/hooks/use-game-stream";
+import { Player } from "@/lib/types";
+import GameView from "./GameView";
+import PlayerSetup from "./PlayerSetup";
 
 interface GameContentProps {
   initialCuratedGames: CuratedGame[];
@@ -30,7 +30,15 @@ export default function GameContent({ initialCuratedGames }: GameContentProps) {
     submitHumanTurn,
   } = useGameStream();
 
-  const { accessCode, remainingGames, consumeGame, clearCode, validateCode, isValidating, hasAccess } = useAccess();
+  const {
+    accessCode,
+    remainingGames,
+    consumeGame,
+    clearCode,
+    validateCode,
+    isValidating,
+    hasAccess,
+  } = useAccess();
 
   const handleStartGame = async (
     selectedPlayers: Player[],
@@ -76,7 +84,9 @@ export default function GameContent({ initialCuratedGames }: GameContentProps) {
           <h2 className="pixel-title text-lg text-[var(--pixel-red)] mb-4">
             A DARK FORCE INTERVENES
           </h2>
-          <p className="pixel-text text-[var(--pixel-text-dim)] mb-6">{error}</p>
+          <p className="pixel-text text-[var(--pixel-text-dim)] mb-6">
+            {error}
+          </p>
           <button onClick={reset} className="pixel-btn pixel-btn-primary">
             TRY AGAIN
           </button>
@@ -99,4 +109,3 @@ export default function GameContent({ initialCuratedGames }: GameContentProps) {
     />
   );
 }
-

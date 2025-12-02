@@ -1,9 +1,9 @@
-import { AccessProvider } from "@/lib/contexts/access-context";
 import { getCuratedGames } from "@/lib/access-control";
+import { AccessProvider } from "@/lib/contexts/access-context";
 import GameContent from "./components/GameContent";
 
 // Revalidate curated games every 6 hours (ISR)
-export const revalidate = 60 * 60 * 6;
+export const revalidate = 21600;
 
 export default async function Home() {
   // Fetch curated games on the server
