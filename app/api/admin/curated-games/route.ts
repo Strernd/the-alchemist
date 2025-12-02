@@ -48,8 +48,8 @@ export async function POST(request: NextRequest) {
     games.unshift(curatedGame); // Add to front of list
     await kv.set(getCuratedGamesKey(), games);
 
-    // Revalidate the curated games cache
-    revalidatePath('/api/curated-games');
+    // Revalidate the home page to pick up new curated games
+    revalidatePath('/');
 
     return NextResponse.json({ game: curatedGame });
   } catch (error) {

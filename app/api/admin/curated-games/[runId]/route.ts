@@ -27,8 +27,8 @@ export async function DELETE(
 
     await kv.set(getCuratedGamesKey(), filteredGames);
 
-    // Revalidate the curated games cache
-    revalidatePath('/api/curated-games');
+    // Revalidate the home page to update curated games
+    revalidatePath('/');
 
     return NextResponse.json({ success: true });
   } catch (error) {
