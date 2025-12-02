@@ -161,6 +161,14 @@ export const AI_MODELS = [
     output: 10,
     tier: 4,
   },
+  {
+    id: "arcee-ai/trinity-mini",
+    name: "Trinity Mini",
+    provider: "Arcee AI",
+    input: 0.04,
+    output: 0.15,
+    tier: 1,
+  },
 ] as const;
 
 export type AIModel = (typeof AI_MODELS)[number];
