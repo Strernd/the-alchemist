@@ -1,5 +1,5 @@
+import { PlayerDayHistory, PotionId, PotionMarketData } from "@/lib/types";
 import { generateText } from "ai";
-import { PlayerDayHistory, PotionMarketData, PotionId } from "@/lib/types";
 import { formatActionHistory } from "./prompts";
 
 export type StrategyGenerationInput = {
@@ -36,7 +36,7 @@ Now analyze your performance and create a strategy for next time.`;
 function formatGameSummary(input: StrategyGenerationInput): string {
   const profitLoss = input.finalGold - input.startingGold;
   const profitPercent = ((profitLoss / input.startingGold) * 100).toFixed(1);
-  
+
   // Calculate aggregate stats from history
   let totalHerbCost = 0;
   let totalRevenue = 0;
@@ -54,7 +54,8 @@ function formatGameSummary(input: StrategyGenerationInput): string {
     totalPotionsCrafted += day.potionsMade.reduce((s, p) => s + p.qty, 0);
   }
 
-  const sellRate = totalOffered > 0 ? ((totalSold / totalOffered) * 100).toFixed(0) : "0";
+  const sellRate =
+    totalOffered > 0 ? ((totalSold / totalOffered) * 100).toFixed(0) : "0";
 
   return `## YOUR GAME RESULTS
 - Final Position: #${input.finalRank} of ${input.totalPlayers} players
@@ -73,9 +74,13 @@ function formatGameSummary(input: StrategyGenerationInput): string {
 ## YOUR DAY-BY-DAY DECISIONS
 ${formatActionHistory(input.actionHistory, input.actionHistory.length)}
 
-${input.previousStrategy ? `## STRATEGY YOU WERE FOLLOWING
+${
+  input.previousStrategy
+    ? `## STRATEGY YOU WERE FOLLOWING
 ${input.previousStrategy}
-` : ""}`;
+`
+    : ""
+}`;
 }
 
 export async function generateStrategyFromGame(
@@ -83,10 +88,10 @@ export async function generateStrategyFromGame(
 ): Promise<StrategyGenerationResult> {
   const userPrompt = `${formatGameSummary(input)}
 
-Based on your performance, create a concise strategy for playing better next time.
+Based on your performance, create a concise strategy (max 2500 characters) for playing better (or as well) next time.
 
 Consider:
-1. What worked well? What should you keep doing?
+1. What worked well? What should you keep doing? Make sure to mention what you did that worked.
 2. What didn't work? What mistakes did you make?
 3. How could you improve your pricing strategy?
 4. How could you better predict demand and manage inventory?
@@ -116,4 +121,3 @@ Focus on specific, concrete actions rather than vague principles.`;
     };
   }
 }
-

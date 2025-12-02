@@ -273,7 +273,27 @@ export function useGameStream() {
             "[Game] Stream ended. Total states received:",
             statesReceived
           );
-          setState((prev) => ({ ...prev, phase: "completed" }));
+          // Check if game actually completed all days before marking as completed
+          setState((prev) => {
+            const completedDays = prev.gameStates
+              .slice(1)
+              .filter((gs) => !gs.waitingForHuman).length;
+            const totalDays = prev.totalDaysConfig;
+            
+            if (completedDays >= totalDays) {
+              console.log("[Game] Game completed successfully:", completedDays, "/", totalDays, "days");
+              return { ...prev, phase: "completed" };
+            } else {
+              console.warn("[Game] Stream ended early:", completedDays, "/", totalDays, "days completed");
+              // Keep running state - user can reload to resume
+              // Only set error if we received very few states (likely a real error)
+              if (statesReceived <= 1) {
+                return { ...prev, phase: "error", error: "Game stream ended unexpectedly. Try reloading." };
+              }
+              // Otherwise stay in running state - the game might still be in progress on the server
+              return prev;
+            }
+          });
           break;
         }
 

@@ -8,7 +8,7 @@ import {
 import { isAdminAuthenticated } from "@/lib/admin-auth";
 import { revalidatePath } from "next/cache";
 
-const MAX_STRATEGY_LENGTH = 1000;
+const MAX_STRATEGY_LENGTH = 2500;
 
 // PUT - Update a default strategy (admin only)
 export async function PUT(

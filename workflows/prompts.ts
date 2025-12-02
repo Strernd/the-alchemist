@@ -49,7 +49,7 @@ Return JSON with three arrays. ONLY include items you actually want - omit items
 Use EMPTY ARRAYS [] if you have nothing for that action.
 `;
 
-const MAX_STRATEGY_LENGTH = 1000;
+const MAX_STRATEGY_LENGTH = 2500;
 
 // Build system prompt with optional strategy
 export function buildSystemPrompt(strategyPrompt?: string): string {

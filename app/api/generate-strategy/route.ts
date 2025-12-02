@@ -1,15 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
 import {
   generateStrategyFromGame,
   StrategyGenerationInput,
 } from "@/workflows/generate-strategy-step";
+import { NextRequest, NextResponse } from "next/server";
 
-const MAX_STRATEGY_LENGTH = 1000;
+const MAX_STRATEGY_LENGTH = 2500;
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    
+
     // Truncate previousStrategy input to prevent token abuse
     const previousStrategy = body.previousStrategy
       ? String(body.previousStrategy).slice(0, MAX_STRATEGY_LENGTH)
@@ -49,4 +49,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

@@ -881,7 +881,7 @@ export default function PlayerSetup({
                   onChange={(e) => setNewStrategyPrompt(e.target.value)}
                   placeholder="Strategy instructions (e.g., Focus on T3 potions. Undercut competitors by 10%. Never hold inventory overnight...)"
                   className="pixel-input w-full h-32 resize-none"
-                  maxLength={1000}
+                  maxLength={2500}
                 />
                 <div className="flex gap-2">
                   {editingStrategy ? (
@@ -936,7 +936,7 @@ export default function PlayerSetup({
                     onChange={(e) => setNewDefaultStrategyPrompt(e.target.value)}
                     placeholder="Strategy instructions..."
                     className="pixel-input w-full h-24 resize-none"
-                    maxLength={1000}
+                    maxLength={2500}
                   />
                   <button
                     onClick={handleAddDefaultStrategy}

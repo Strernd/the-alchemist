@@ -3,7 +3,7 @@ import { Player } from "@/lib/types";
 import { gameWorkflow } from "@/workflows/game-workflow";
 import { start } from "workflow/api";
 
-const MAX_STRATEGY_LENGTH = 1000;
+const MAX_STRATEGY_LENGTH = 2500;
 
 function generateSeed(): string {
   return Math.random().toString(36).substring(2, 12);
