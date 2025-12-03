@@ -169,6 +169,14 @@ export const AI_MODELS = [
     output: 0.15,
     tier: 1,
   },
+  {
+    id: "mistral/mistral-large-3",
+    name: "Mistral Large 3",
+    provider: "Mistral",
+    input: 0.5,
+    output: 1.5,
+    tier: 2,
+  },
 ] as const;
 
 export type AIModel = (typeof AI_MODELS)[number];
