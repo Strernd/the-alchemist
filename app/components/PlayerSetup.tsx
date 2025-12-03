@@ -476,6 +476,15 @@ export default function PlayerSetup({
         </button>
       </div>
 
+      {/* Service Issue Banner */}
+      <div className="max-w-2xl mx-auto mb-6 w-full">
+        <div className="pixel-frame border-[var(--pixel-orange)] bg-[var(--pixel-orange)]/10 p-4 text-center">
+          <p className="pixel-text-sm text-[var(--pixel-orange)]">
+            ⚠️ We&apos;re experiencing an issue with streaming data from workflows. New games cannot be watched. Featured games can still be watched.
+          </p>
+        </div>
+      </div>
+
       {/* Access Code Section */}
       <div className="max-w-lg mx-auto mb-6">
         {isValidating ? (
