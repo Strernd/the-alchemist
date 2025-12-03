@@ -71,6 +71,16 @@ ${historySection || "Day 1 - no history yet"}
 === YESTERDAY'S MARKET ===
 Trading activity for ALL potions yesterday. Shows total offered by all players, how many sold, and price range of sales.
 ${formatYesterdayMarket(inputs.historicMarkets)}
+
+=== Return JSON Format ===
+Return JSON with three arrays. ONLY include items you actually want - omit items with qty 0:
+- buyHerbs: [{herbId: "H01", qty: 5}] - only herbs you're buying
+- makePotions: [{potionId: "P01", qty: 2}] - only potions you're crafting
+- potionOffers: [{potionId: "P01", price: 50, qty: 2}] - only potions you're selling
+
+Use EMPTY ARRAYS [] if you have nothing for that action.
+
+Respond only with JSON.
 `;
 
   const startTime = Date.now();
