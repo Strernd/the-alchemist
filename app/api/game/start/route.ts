@@ -41,7 +41,13 @@ export async function POST(request: Request) {
   const gameSeed = seed || generateSeed();
   const config = getWithDefaultConfig(gameSeed, sanitizedPlayers, gameDays);
 
+  console.log(
+    `[Game Start] Starting game with seed=${gameSeed}, days=${gameDays}, players=${sanitizedPlayers.length}`
+  );
+
   const run = await start(gameWorkflow, [config]);
+
+  console.log(`[Game Start] Created run ${run.runId}`);
 
   return Response.json({ runId: run.runId, seed: gameSeed });
 }

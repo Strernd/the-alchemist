@@ -153,6 +153,11 @@ export async function gameWorkflow(config: GameConfig) {
     disqualifiedPlayers: disqualified,
     playerUsageStats: [...playerUsageStats],
   };
+  console.log(
+    `[Game] Streaming initial state with names: ${namedPlayers
+      .map((p) => p.name)
+      .join(", ")}`
+  );
   await streamContentToClient(writable, gameState);
 
   // Use seed for hook tokens (must be deterministic for workflow replay)
