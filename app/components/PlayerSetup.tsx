@@ -1,11 +1,11 @@
 "use client";
 
+import { AccessCode, CuratedGame, DefaultStrategy } from "@/lib/access-control";
 import { RunInfo } from "@/lib/hooks/use-game-stream";
-import { useStrategies, Strategy } from "@/lib/hooks/use-strategies";
+import { Strategy, useStrategies } from "@/lib/hooks/use-strategies";
 import { AI_MODELS, AIModel } from "@/lib/models";
 import { Player } from "@/lib/types";
-import { AccessCode, CuratedGame, DefaultStrategy } from "@/lib/access-control";
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import GameRulesModal from "./GameRulesModal";
 
 interface PlayerSetupProps {
@@ -67,12 +67,48 @@ export default function PlayerSetup({
   const defaultModelId = availableModels[0]?.id ?? AI_MODELS[0].id;
 
   const [playerSlots, setPlayerSlots] = useState<PlayerSlot[]>([
-    { enabled: true, modelId: "human", isHuman: true, humanName: "", strategyId: "" },
-    { enabled: true, modelId: defaultModelId, isHuman: false, humanName: "", strategyId: "" },
-    { enabled: false, modelId: defaultModelId, isHuman: false, humanName: "", strategyId: "" },
-    { enabled: false, modelId: defaultModelId, isHuman: false, humanName: "", strategyId: "" },
-    { enabled: false, modelId: defaultModelId, isHuman: false, humanName: "", strategyId: "" },
-    { enabled: false, modelId: defaultModelId, isHuman: false, humanName: "", strategyId: "" },
+    {
+      enabled: true,
+      modelId: "human",
+      isHuman: true,
+      humanName: "",
+      strategyId: "",
+    },
+    {
+      enabled: true,
+      modelId: defaultModelId,
+      isHuman: false,
+      humanName: "",
+      strategyId: "",
+    },
+    {
+      enabled: false,
+      modelId: defaultModelId,
+      isHuman: false,
+      humanName: "",
+      strategyId: "",
+    },
+    {
+      enabled: false,
+      modelId: defaultModelId,
+      isHuman: false,
+      humanName: "",
+      strategyId: "",
+    },
+    {
+      enabled: false,
+      modelId: defaultModelId,
+      isHuman: false,
+      humanName: "",
+      strategyId: "",
+    },
+    {
+      enabled: false,
+      modelId: defaultModelId,
+      isHuman: false,
+      humanName: "",
+      strategyId: "",
+    },
   ]);
 
   const maxDays = accessCode?.maxDays ?? 30;
@@ -80,11 +116,14 @@ export default function PlayerSetup({
   const [seed, setSeed] = useState("");
   const [days, setDays] = useState(5);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [activeTab, setActiveTab] = useState<"new" | "history" | "strategies" | "curated">("new");
+  const [activeTab, setActiveTab] = useState<
+    "new" | "history" | "strategies" | "curated"
+  >("new");
   const [showRules, setShowRules] = useState(false);
 
   // Curated games state - initialized from RSC props
-  const [curatedGames, setCuratedGames] = useState<CuratedGame[]>(initialCuratedGames);
+  const [curatedGames, setCuratedGames] =
+    useState<CuratedGame[]>(initialCuratedGames);
   const [loadingCurated, setLoadingCurated] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [addingToCurated, setAddingToCurated] = useState<string | null>(null);
@@ -120,8 +159,11 @@ export default function PlayerSetup({
   // Add a game to curated list (admin only)
   const addToCurated = async (run: RunInfo) => {
     if (!isAdmin) return;
-    
-    const title = prompt("Enter a title for this curated game:", `Game ${run.seed}`);
+
+    const title = prompt(
+      "Enter a title for this curated game:",
+      `Game ${run.seed}`
+    );
     if (!title) return;
 
     const description = prompt("Enter a description (optional):", "");
@@ -136,7 +178,7 @@ export default function PlayerSetup({
           seed: run.seed,
           title,
           description: description || undefined,
-          players: pastRuns.find(r => r.runId === run.runId)?.players || [],
+          players: pastRuns.find((r) => r.runId === run.runId)?.players || [],
           totalDays: 5, // TODO: Get from run data
           winner: undefined, // TODO: Get from run data
         }),
@@ -160,7 +202,9 @@ export default function PlayerSetup({
     if (!isAdmin || !confirm("Remove this game from the curated list?")) return;
 
     try {
-      const res = await fetch(`/api/admin/curated-games/${runId}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/curated-games/${runId}`, {
+        method: "DELETE",
+      });
       if (res.ok) {
         setCuratedGames((prev) => prev.filter((g) => g.runId !== runId));
       }
@@ -239,7 +283,12 @@ export default function PlayerSetup({
   const [addingDefaultStrategy, setAddingDefaultStrategy] = useState(false);
 
   const handleAddDefaultStrategy = async () => {
-    if (!isAdmin || !newDefaultStrategyName.trim() || !newDefaultStrategyPrompt.trim()) return;
+    if (
+      !isAdmin ||
+      !newDefaultStrategyName.trim() ||
+      !newDefaultStrategyPrompt.trim()
+    )
+      return;
 
     setAddingDefaultStrategy(true);
     try {
@@ -267,10 +316,18 @@ export default function PlayerSetup({
   };
 
   const handleDeleteDefaultStrategy = async (id: string) => {
-    if (!isAdmin || !confirm("Delete this default strategy? It will be removed for all users.")) return;
+    if (
+      !isAdmin ||
+      !confirm(
+        "Delete this default strategy? It will be removed for all users."
+      )
+    )
+      return;
 
     try {
-      const res = await fetch(`/api/admin/strategies/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/strategies/${id}`, {
+        method: "DELETE",
+      });
       if (res.ok) {
         await refreshDefaultStrategies();
       } else {
@@ -300,7 +357,7 @@ export default function PlayerSetup({
     setPlayerSlots((prev) => {
       const enabled = prev.filter((p) => p.enabled).length;
       if (enabled <= maxPlayers) return prev;
-      
+
       // Disable players from the end until we're at the limit
       let toDisable = enabled - maxPlayers;
       const newSlots = [...prev];
@@ -337,7 +394,9 @@ export default function PlayerSetup({
           console.error(`Model not found: ${slot.modelId}`);
           return { name: "Unknown", model: slot.modelId, isHuman: false };
         }
-        const strategy = slot.strategyId ? getStrategy(slot.strategyId) : undefined;
+        const strategy = slot.strategyId
+          ? getStrategy(slot.strategyId)
+          : undefined;
         return {
           name: model.name,
           model: slot.modelId,
@@ -364,7 +423,10 @@ export default function PlayerSetup({
 
   const handleUpdateStrategy = () => {
     if (editingStrategy && newStrategyName.trim() && newStrategyPrompt.trim()) {
-      updateStrategy(editingStrategy.id, { name: newStrategyName, prompt: newStrategyPrompt });
+      updateStrategy(editingStrategy.id, {
+        name: newStrategyName,
+        prompt: newStrategyPrompt,
+      });
       setEditingStrategy(null);
       setNewStrategyName("");
       setNewStrategyPrompt("");
@@ -476,29 +538,32 @@ export default function PlayerSetup({
         </button>
       </div>
 
-      {/* Service Issue Banner */}
-      <div className="max-w-2xl mx-auto mb-6 w-full">
-        <div className="pixel-frame border-[var(--pixel-orange)] bg-[var(--pixel-orange)]/10 p-4 text-center">
-          <p className="pixel-text-sm text-[var(--pixel-orange)]">
-            ⚠️ We&apos;re experiencing an issue with streaming data from workflows. New games cannot be watched. Featured games can still be watched.
-          </p>
-        </div>
-      </div>
-
       {/* Access Code Section */}
       <div className="max-w-lg mx-auto mb-6">
         {isValidating ? (
           <div className="pixel-frame p-3 text-center">
-            <span className="pixel-text-sm text-[var(--pixel-text-dim)]">Validating access...</span>
+            <span className="pixel-text-sm text-[var(--pixel-text-dim)]">
+              Validating access...
+            </span>
           </div>
         ) : accessCode ? (
           <div className="pixel-frame p-3 flex items-center justify-between">
             <div className="flex items-center gap-4 flex-wrap">
               <span className="pixel-text-sm">
-                🎫 <span className="text-[var(--pixel-gold)]">{accessCode.code}</span>
+                🎫{" "}
+                <span className="text-[var(--pixel-gold)]">
+                  {accessCode.code}
+                </span>
               </span>
               <span className="pixel-text-sm">
-                🎮 <span className={remainingGames > 0 ? "text-[var(--pixel-green-bright)]" : "text-[var(--pixel-red)]"}>
+                🎮{" "}
+                <span
+                  className={
+                    remainingGames > 0
+                      ? "text-[var(--pixel-green-bright)]"
+                      : "text-[var(--pixel-red)]"
+                  }
+                >
                   {remainingGames} games left
                 </span>
               </span>
@@ -523,8 +588,9 @@ export default function PlayerSetup({
         ) : (
           <div className="pixel-frame-gold p-4">
             <p className="pixel-text-sm text-[var(--pixel-text-dim)] text-center mb-4">
-              Unfortunately games can easily cost a few cents to a few dollars, so access to starting games is restricted. 
-              You can inspect past, curated games below, or contact me to ask for a code.
+              Unfortunately games can easily cost a few cents to a few dollars,
+              so access to starting games is restricted. You can inspect past,
+              curated games below, or contact me to ask for a code.
             </p>
             <p className="pixel-text-sm text-center mb-3">
               🎫 Enter an access code to start new games
@@ -547,7 +613,9 @@ export default function PlayerSetup({
               </button>
             </form>
             {codeError && (
-              <p className="pixel-text-sm text-[var(--pixel-red)] text-center mt-2">{codeError}</p>
+              <p className="pixel-text-sm text-[var(--pixel-red)] text-center mt-2">
+                {codeError}
+              </p>
             )}
           </div>
         )}
@@ -569,7 +637,8 @@ export default function PlayerSetup({
             activeTab === "curated" ? "pixel-btn-primary" : ""
           }`}
         >
-          ⭐ FEATURED GAMES {curatedGames.length > 0 && `(${curatedGames.length})`}
+          ⭐ FEATURED GAMES{" "}
+          {curatedGames.length > 0 && `(${curatedGames.length})`}
         </button>
         <button
           onClick={() => setActiveTab("strategies")}
@@ -616,12 +685,24 @@ export default function PlayerSetup({
             {playerSlots.map((slot, index) => (
               <div
                 key={index}
-                onClick={() => !slot.enabled && enabledCount < maxPlayers && togglePlayer(index)}
+                onClick={() =>
+                  !slot.enabled &&
+                  enabledCount < maxPlayers &&
+                  togglePlayer(index)
+                }
                 className={`
                   pixel-frame p-4 lg:p-6 transition-opacity
                   ${slot.enabled ? "opacity-100" : "opacity-40"}
-                  ${!slot.enabled && enabledCount < maxPlayers ? "cursor-pointer hover:opacity-60" : ""}
-                  ${!slot.enabled && enabledCount >= maxPlayers ? "cursor-not-allowed" : ""}
+                  ${
+                    !slot.enabled && enabledCount < maxPlayers
+                      ? "cursor-pointer hover:opacity-60"
+                      : ""
+                  }
+                  ${
+                    !slot.enabled && enabledCount >= maxPlayers
+                      ? "cursor-not-allowed"
+                      : ""
+                  }
                   ${slot.enabled ? `player-bg-${index}` : ""}
                 `}
                 style={{
@@ -660,7 +741,10 @@ export default function PlayerSetup({
                           : "bg-[var(--pixel-green)] border-[var(--pixel-green-bright)] hover:bg-[var(--pixel-green-bright)]"
                       }
                     `}
-                    disabled={(slot.enabled && enabledCount <= 1) || (!slot.enabled && enabledCount >= maxPlayers)}
+                    disabled={
+                      (slot.enabled && enabledCount <= 1) ||
+                      (!slot.enabled && enabledCount >= maxPlayers)
+                    }
                   >
                     {slot.enabled ? "−" : "+"}
                   </button>
@@ -742,7 +826,9 @@ export default function PlayerSetup({
                         {/* Strategy Selector */}
                         <select
                           value={slot.strategyId}
-                          onChange={(e) => setPlayerStrategy(index, e.target.value)}
+                          onChange={(e) =>
+                            setPlayerStrategy(index, e.target.value)
+                          }
                           onClick={(e) => e.stopPropagation()}
                           className="pixel-select w-full text-xs"
                         >
@@ -799,7 +885,12 @@ export default function PlayerSetup({
                   </div>
                   <p className="pixel-text-sm text-[var(--pixel-text-dim)] mt-1">
                     1-{Math.min(20, maxDays)} days of trading
-                    {maxDays < 20 && <span className="text-[var(--pixel-gold)]"> (code limit: {maxDays})</span>}
+                    {maxDays < 20 && (
+                      <span className="text-[var(--pixel-gold)]">
+                        {" "}
+                        (code limit: {maxDays})
+                      </span>
+                    )}
                   </p>
                 </div>
 
@@ -827,7 +918,9 @@ export default function PlayerSetup({
           <button
             onClick={handleStart}
             disabled={enabledCount < 1 || !hasAccess}
-            className={`pixel-btn pixel-btn-primary text-sm lg:text-base px-8 lg:px-12 py-4 lg:py-6 ${hasAccess ? "pixel-pulse" : "opacity-50"}`}
+            className={`pixel-btn pixel-btn-primary text-sm lg:text-base px-8 lg:px-12 py-4 lg:py-6 ${
+              hasAccess ? "pixel-pulse" : "opacity-50"
+            }`}
           >
             {hasAccess ? "⚔ BEGIN TOURNAMENT ⚔" : "🔒 ENTER CODE TO PLAY"}
           </button>
@@ -897,7 +990,9 @@ export default function PlayerSetup({
                     <>
                       <button
                         onClick={handleUpdateStrategy}
-                        disabled={!newStrategyName.trim() || !newStrategyPrompt.trim()}
+                        disabled={
+                          !newStrategyName.trim() || !newStrategyPrompt.trim()
+                        }
                         className="pixel-btn pixel-btn-primary flex-1"
                       >
                         ✓ SAVE CHANGES
@@ -912,7 +1007,9 @@ export default function PlayerSetup({
                   ) : (
                     <button
                       onClick={handleAddStrategy}
-                      disabled={!newStrategyName.trim() || !newStrategyPrompt.trim()}
+                      disabled={
+                        !newStrategyName.trim() || !newStrategyPrompt.trim()
+                      }
                       className="pixel-btn pixel-btn-primary w-full"
                     >
                       + ADD STRATEGY
@@ -942,17 +1039,25 @@ export default function PlayerSetup({
                   />
                   <textarea
                     value={newDefaultStrategyPrompt}
-                    onChange={(e) => setNewDefaultStrategyPrompt(e.target.value)}
+                    onChange={(e) =>
+                      setNewDefaultStrategyPrompt(e.target.value)
+                    }
                     placeholder="Strategy instructions..."
                     className="pixel-input w-full h-24 resize-none"
                     maxLength={2500}
                   />
                   <button
                     onClick={handleAddDefaultStrategy}
-                    disabled={!newDefaultStrategyName.trim() || !newDefaultStrategyPrompt.trim() || addingDefaultStrategy}
+                    disabled={
+                      !newDefaultStrategyName.trim() ||
+                      !newDefaultStrategyPrompt.trim() ||
+                      addingDefaultStrategy
+                    }
                     className="pixel-btn pixel-btn-primary w-full"
                   >
-                    {addingDefaultStrategy ? "Adding..." : "👑 ADD DEFAULT STRATEGY"}
+                    {addingDefaultStrategy
+                      ? "Adding..."
+                      : "👑 ADD DEFAULT STRATEGY"}
                   </button>
                 </div>
               </div>
@@ -974,14 +1079,18 @@ export default function PlayerSetup({
                 {strategies.map((strategy) => (
                   <div
                     key={strategy.id}
-                    className={`pixel-frame p-4 ${strategy.isDefault ? "border-[var(--pixel-gold)]" : ""}`}
+                    className={`pixel-frame p-4 ${
+                      strategy.isDefault ? "border-[var(--pixel-gold)]" : ""
+                    }`}
                   >
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <div className="flex-1 min-w-0">
                         <h4 className="pixel-text font-bold truncate">
                           {strategy.isDefault ? "👑" : "🧠"} {strategy.name}
                           {strategy.isDefault && (
-                            <span className="ml-2 text-xs text-[var(--pixel-gold)]">(DEFAULT)</span>
+                            <span className="ml-2 text-xs text-[var(--pixel-gold)]">
+                              (DEFAULT)
+                            </span>
                           )}
                         </h4>
                       </div>
@@ -1006,7 +1115,9 @@ export default function PlayerSetup({
                           </>
                         ) : isAdmin ? (
                           <button
-                            onClick={() => handleDeleteDefaultStrategy(strategy.id)}
+                            onClick={() =>
+                              handleDeleteDefaultStrategy(strategy.id)
+                            }
                             className="pixel-btn text-xs px-2 py-1 hover:border-[var(--pixel-red)] hover:text-[var(--pixel-red)]"
                             title="Delete default strategy"
                           >
@@ -1200,7 +1311,10 @@ export default function PlayerSetup({
                           </span>
                           <span className="pixel-heading truncate">
                             {(() => {
-                              const names = run.players?.map(p => p.name) || run.playerNames || [];
+                              const names =
+                                run.players?.map((p) => p.name) ||
+                                run.playerNames ||
+                                [];
                               return (
                                 <>
                                   {names.slice(0, 3).join(" vs ")}
@@ -1245,15 +1359,26 @@ export default function PlayerSetup({
                               e.stopPropagation();
                               addToCurated(run);
                             }}
-                            disabled={addingToCurated === run.runId || curatedGames.some(g => g.runId === run.runId)}
+                            disabled={
+                              addingToCurated === run.runId ||
+                              curatedGames.some((g) => g.runId === run.runId)
+                            }
                             className={`pixel-btn text-xs ${
-                              curatedGames.some(g => g.runId === run.runId)
+                              curatedGames.some((g) => g.runId === run.runId)
                                 ? "opacity-50 cursor-not-allowed"
                                 : "hover:border-[var(--pixel-gold)] hover:text-[var(--pixel-gold)]"
                             }`}
-                            title={curatedGames.some(g => g.runId === run.runId) ? "Already featured" : "Add to featured games"}
+                            title={
+                              curatedGames.some((g) => g.runId === run.runId)
+                                ? "Already featured"
+                                : "Add to featured games"
+                            }
                           >
-                            {addingToCurated === run.runId ? "..." : curatedGames.some(g => g.runId === run.runId) ? "⭐" : "☆"}
+                            {addingToCurated === run.runId
+                              ? "..."
+                              : curatedGames.some((g) => g.runId === run.runId)
+                              ? "⭐"
+                              : "☆"}
                           </button>
                         )}
                         <button
