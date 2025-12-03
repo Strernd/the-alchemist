@@ -101,10 +101,10 @@ Respond only with JSON.
     // AI SDK LanguageModelV2Usage has inputTokens/outputTokens
     const inputTokens = usage?.inputTokens || 0;
     const outputTokens = usage?.outputTokens || 0;
-    // Reasoning tokens are included in some models (like o1, Claude thinking)
-    const reasoningTokens =
-      (usage as { reasoningTokens?: number })?.reasoningTokens || 0;
-    const totalTokens = usage?.totalTokens || inputTokens + outputTokens;
+    const totalTokens = usage?.totalTokens || 0;
+    const reasoningTokens = usage?.reasoningTokens
+      ? usage.reasoningTokens
+      : totalTokens - inputTokens - outputTokens;
 
     console.log(
       `[Step] ${modelId} day ${
