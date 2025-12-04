@@ -177,6 +177,14 @@ export const AI_MODELS = [
     output: 1.5,
     tier: 2,
   },
+  {
+    id: "amazon/nova-2-lite",
+    name: "Nova 2 Lite",
+    provider: "Amazon",
+    input: 0.3,
+    output: 2.5,
+    tier: 2,
+  },
 ] as const;
 
 export type AIModel = (typeof AI_MODELS)[number];
