@@ -87,16 +87,20 @@ Respond only with JSON.
   console.log(userPrompt);
 
   try {
-    const { object, usage, reasoning } = await generateObject({
-      model: modelId,
-      schema: playerOutputsSchema,
-      system: systemPrompt,
-      prompt: userPrompt,
-      mode: "json",
-    });
+    const { object, usage, reasoning, providerMetadata } = await generateObject(
+      {
+        model: modelId,
+        schema: playerOutputsSchema,
+        system: systemPrompt,
+        prompt: userPrompt,
+        mode: "json",
+      }
+    );
 
     const durationMs = Date.now() - startTime;
     const sanitized = sanitizeAIResponse(object);
+
+    console.log(`Provider Metadata for ${modelId}: `, providerMetadata);
 
     // AI SDK LanguageModelV2Usage has inputTokens/outputTokens
     const inputTokens = usage?.inputTokens || 0;
