@@ -16,9 +16,19 @@ import { createHook, getWritable } from "workflow";
 import { aiPlayerStep, PlayerStepResult } from "./ai-player-step";
 import { chooseAlchemistName, NameResult, UsageData } from "./name-step";
 
-// Calculate cost in USD from usage data and model pricing
-function calculateCost(modelId: string, usage: UsageData | undefined): number {
+// Get cost in USD - use actual billed amount from gateway if available, otherwise estimate from model pricing
+function getCost(modelId: string, usage: UsageData | undefined): number {
   if (!usage) return 0;
+  
+  // Use actual billed cost from gateway if available
+  if (usage.costUsd !== undefined) {
+    console.log(
+      `[Cost] ${modelId.split("/").pop()}: $${usage.costUsd.toFixed(6)} (gateway billed)`
+    );
+    return usage.costUsd;
+  }
+  
+  // Fall back to estimated cost from model pricing
   const model = AI_MODELS.find((m) => m.id === modelId);
   if (!model) {
     console.warn(`[Cost] Model not found: ${modelId}`);
@@ -41,7 +51,7 @@ function calculateCost(modelId: string, usage: UsageData | undefined): number {
       model.input
     } + ${usage.outputTokens}out*$${
       model.output
-    }${reasoningStr} = $${total.toFixed(6)}`
+    }${reasoningStr} = $${total.toFixed(6)} (estimated)`
   );
 
   return total;
@@ -116,7 +126,7 @@ export async function gameWorkflow(config: GameConfig) {
 
     // Only accumulate usage for AI players
     if (!player.isHuman) {
-      const cost = calculateCost(player.model, result.usage);
+      const cost = getCost(player.model, result.usage);
       playerUsageStats[idx] = addUsage(
         playerUsageStats[idx],
         result.usage,
@@ -317,7 +327,7 @@ export async function gameWorkflow(config: GameConfig) {
       // Handle AI result (usage tracking, disqualification)
       if (result) {
         if (result.usage) {
-          const cost = calculateCost(player.model, result.usage);
+          const cost = getCost(player.model, result.usage);
           playerUsageStats[idx] = addUsage(
             playerUsageStats[idx],
             result.usage,

@@ -27,10 +27,13 @@ export default function GameContent({
     pastRuns,
     loadingRuns,
     waitingForHuman,
+    connectionLost,
+    isReconnecting,
     startGame,
     loadExistingRun,
     deleteRun,
     reset,
+    reconnect,
     submitHumanTurn,
   } = useGameStream();
 
@@ -109,7 +112,10 @@ export default function GameContent({
       daysCompleted={daysCompleted}
       totalDays={totalDays}
       waitingForHuman={waitingForHuman}
+      connectionLost={connectionLost}
+      isReconnecting={isReconnecting}
       onReset={reset}
+      onReconnect={reconnect}
       onSubmitHumanTurn={submitHumanTurn}
     />
   );

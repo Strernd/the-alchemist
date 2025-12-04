@@ -37,7 +37,10 @@ interface GameViewProps {
     herbPrices: Record<HerbId, number>;
     waitingForAIs?: boolean;
   };
+  connectionLost: boolean;
+  isReconnecting: boolean;
   onReset: () => void;
+  onReconnect: () => void;
   onSubmitHumanTurn: (hookToken: string, outputs: PlayerOutputs) => Promise<boolean>;
 }
 
@@ -63,7 +66,10 @@ export default function GameView({
   daysCompleted,
   totalDays,
   waitingForHuman,
+  connectionLost,
+  isReconnecting,
   onReset,
+  onReconnect,
   onSubmitHumanTurn,
 }: GameViewProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("overview");
@@ -320,6 +326,40 @@ export default function GameView({
         </div>
       )}
 
+      {/* Connection Lost Banner */}
+      {connectionLost && (
+        <div className="pixel-frame p-4 mb-4 text-center border-[var(--pixel-orange)]" style={{ borderColor: 'var(--pixel-orange)' }}>
+          <span className="text-2xl mr-2">📡</span>
+          <span className="pixel-title text-[var(--pixel-orange)]">CONNECTION LOST</span>
+          <p className="pixel-text-sm text-[var(--pixel-text-dim)] mt-2">
+            The connection to the server timed out. The game may still be running on the server.
+          </p>
+          <div className="flex justify-center gap-3 mt-4">
+            <button onClick={onReconnect} className="pixel-btn pixel-btn-primary">
+              🔄 TRY RECONNECT
+            </button>
+            <button onClick={onReset} className="pixel-btn">
+              ↺ GO TO HISTORY
+            </button>
+          </div>
+          <p className="pixel-text-sm text-[var(--pixel-text-dim)] mt-3 italic">
+            You can also select this game from your history to continue watching.
+          </p>
+        </div>
+      )}
+
+      {/* Reconnecting indicator */}
+      {isReconnecting && (
+        <div className="pixel-frame p-4 mb-4 text-center border-[var(--pixel-blue-bright)]" style={{ borderColor: 'var(--pixel-blue-bright)' }}>
+          <span className="text-2xl mr-2 pixel-pulse">🔄</span>
+          <span className="pixel-title text-[var(--pixel-blue-bright)]">RECONNECTING</span>
+          <span className="loading-dots"></span>
+          <p className="pixel-text-sm text-[var(--pixel-text-dim)] mt-2">
+            Attempting to restore connection to the game...
+          </p>
+        </div>
+      )}
+
       {/* Content based on view mode */}
       {viewMode === "overview" ? (
         <OverviewView
@@ -354,7 +394,7 @@ export default function GameView({
       )}
 
       {/* Status Bar */}
-      {phase === "running" && (
+      {phase === "running" && !connectionLost && !isReconnecting && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 pixel-frame-gold px-6 py-3 flex items-center gap-3">
           <div className="status-dot status-active" />
           <span className="pixel-text-sm">

@@ -110,6 +110,8 @@ Respond only with JSON.
       ? usage.reasoningTokens
       : totalTokens - inputTokens - outputTokens;
 
+    const billedAmount = providerMetadata?.gateway?.cost as number | undefined;
+
     console.log(
       `[Step] ${modelId} day ${
         inputs.meta.currentDay
@@ -136,6 +138,7 @@ Respond only with JSON.
         reasoningTokens,
         totalTokens,
         durationMs,
+        costUsd: billedAmount,
       },
     };
   } catch (error: unknown) {
