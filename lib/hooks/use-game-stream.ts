@@ -262,14 +262,21 @@ export function useGameStream() {
     initialPlayers: Player[],
     attemptNumber: number = 0
   ): Promise<boolean> => {
-    console.log("[Game] Connecting to stream for run:", runId, "attempt:", attemptNumber);
+    console.log(
+      "[Game] Connecting to stream for run:",
+      runId,
+      "attempt:",
+      attemptNumber
+    );
 
-    // Get current state index to resume from
-    let startIndex = 0;
-    setState((prev) => {
-      startIndex = prev.gameStates.length;
-      return { ...prev, isReconnecting: attemptNumber > 0, connectionLost: false };
-    });
+    // On reconnect, clear existing states since the stream will send everything from the beginning
+    setState((prev) => ({
+      ...prev,
+      isReconnecting: attemptNumber > 0,
+      connectionLost: false,
+      // Clear gameStates on reconnect to avoid duplicates (stream sends all states from start)
+      gameStates: attemptNumber > 0 ? [] : prev.gameStates,
+    }));
 
     const streamResponse = await fetch(`/api/game/stream/${runId}`);
     if (!streamResponse.ok || !streamResponse.body) {
@@ -278,8 +285,12 @@ export function useGameStream() {
     }
 
     console.log("[Game] Stream connected, reading data...");
-    setState((prev) => ({ ...prev, isReconnecting: false, reconnectAttempts: attemptNumber }));
-    
+    setState((prev) => ({
+      ...prev,
+      isReconnecting: false,
+      reconnectAttempts: attemptNumber,
+    }));
+
     const reader = streamResponse.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
@@ -302,13 +313,25 @@ export function useGameStream() {
               .slice(1)
               .filter((gs) => !gs.waitingForHuman).length;
             const totalDays = prev.totalDaysConfig;
-            
+
             if (completedDays >= totalDays) {
-              console.log("[Game] Game completed successfully:", completedDays, "/", totalDays, "days");
+              console.log(
+                "[Game] Game completed successfully:",
+                completedDays,
+                "/",
+                totalDays,
+                "days"
+              );
               gameCompleted = true;
               return { ...prev, phase: "completed", connectionLost: false };
             } else {
-              console.warn("[Game] Stream ended early:", completedDays, "/", totalDays, "days completed");
+              console.warn(
+                "[Game] Stream ended early:",
+                completedDays,
+                "/",
+                totalDays,
+                "days completed"
+              );
               // Don't update state here - we'll handle reconnection logic below
               return prev;
             }
@@ -411,16 +434,18 @@ export function useGameStream() {
     // Stream ended unexpectedly - try to reconnect
     const nextAttempt = attemptNumber + 1;
     if (nextAttempt < MAX_RECONNECT_ATTEMPTS) {
-      console.log(`[Game] Attempting reconnect (${nextAttempt}/${MAX_RECONNECT_ATTEMPTS}) in ${RECONNECT_DELAY_MS}ms...`);
+      console.log(
+        `[Game] Attempting reconnect (${nextAttempt}/${MAX_RECONNECT_ATTEMPTS}) in ${RECONNECT_DELAY_MS}ms...`
+      );
       setState((prev) => ({
         ...prev,
         isReconnecting: true,
         reconnectAttempts: nextAttempt,
       }));
-      
+
       // Wait before reconnecting
       await new Promise((resolve) => setTimeout(resolve, RECONNECT_DELAY_MS));
-      
+
       // Attempt reconnection
       try {
         return await streamGameData(runId, initialPlayers, nextAttempt);
@@ -431,7 +456,9 @@ export function useGameStream() {
     }
 
     // Max reconnection attempts reached - show connection lost state
-    console.log("[Game] Max reconnection attempts reached, showing connection lost");
+    console.log(
+      "[Game] Max reconnection attempts reached, showing connection lost"
+    );
     setState((prev) => ({
       ...prev,
       connectionLost: true,
@@ -463,14 +490,14 @@ export function useGameStream() {
   // Manual reconnection function
   const reconnect = useCallback(async () => {
     if (!state.runId || !state.connectionLost) return;
-    
+
     setState((prev) => ({
       ...prev,
       connectionLost: false,
       reconnectAttempts: 0,
       isReconnecting: true,
     }));
-    
+
     try {
       await streamGameData(state.runId, state.players, 0);
     } catch (error) {
