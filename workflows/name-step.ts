@@ -42,7 +42,7 @@ Respond ONLY with a json object containing the alchemistName. Example: {"alchemi
   const startTime = Date.now();
 
   try {
-    const { object, usage, providerMetadata } = await generateObject({
+    const { object, usage } = await generateObject({
       model: modelId,
       schema: nameSchema,
       prompt,
@@ -65,12 +65,9 @@ Respond ONLY with a json object containing the alchemistName. Example: {"alchemi
     const inputTokens = usage?.inputTokens || 0;
     const outputTokens = usage?.outputTokens || 0;
     const totalTokens = usage?.totalTokens || inputTokens + outputTokens;
-    
-    // Get actual billed cost from gateway if available
-    const billedAmount = providerMetadata?.gateway?.cost as number | undefined;
 
     console.log(
-      `[Name] ${modelId} → "${name}" (${durationMs}ms, ${inputTokens}in/${outputTokens}out tokens${billedAmount !== undefined ? `, $${billedAmount.toFixed(6)}` : ""})`
+      `[Name] ${modelId} → "${name}" (${durationMs}ms, ${inputTokens}in/${outputTokens}out tokens)`
     );
 
     return {
@@ -82,7 +79,6 @@ Respond ONLY with a json object containing the alchemistName. Example: {"alchemi
         reasoningTokens: 0,
         totalTokens,
         durationMs,
-        costUsd: billedAmount,
       },
     };
   } catch (error: unknown) {

@@ -100,8 +100,6 @@ Respond only with JSON.
     const durationMs = Date.now() - startTime;
     const sanitized = sanitizeAIResponse(object);
 
-    console.log(`Provider Metadata for ${modelId}: `, providerMetadata);
-
     // AI SDK LanguageModelV2Usage has inputTokens/outputTokens
     const inputTokens = usage?.inputTokens || 0;
     const outputTokens = usage?.outputTokens || 0;
@@ -110,7 +108,17 @@ Respond only with JSON.
       ? usage.reasoningTokens
       : totalTokens - inputTokens - outputTokens;
 
-    const billedAmount = providerMetadata?.gateway?.cost as number | undefined;
+    // Get actual billed cost from gateway if available (comes as string, needs parsing)
+    const billedAmountString = providerMetadata?.gateway?.cost as
+      | string
+      | undefined;
+    const billedAmount = billedAmountString
+      ? parseFloat(billedAmountString)
+      : undefined;
+
+    if (billedAmount !== undefined) {
+      console.log(`[Step] Billed amount: $${billedAmount.toFixed(6)}`);
+    }
 
     console.log(
       `[Step] ${modelId} day ${
