@@ -235,9 +235,11 @@ export function useGameStream() {
       }
     }
 
+    const isAlreadyCompleted = runInfo.status === "completed";
+
     setState((prev) => ({
       ...prev,
-      phase: runInfo.status === "completed" ? "completed" : "running",
+      phase: isAlreadyCompleted ? "completed" : "running",
       runId: runInfo.runId,
       seed: runInfo.seed,
       players,
@@ -247,7 +249,8 @@ export function useGameStream() {
 
     try {
       // Connect to the stream to get data
-      await streamGameData(runInfo.runId, players);
+      // Pass isAlreadyCompleted to skip reconnection logic for completed games
+      await streamGameData(runInfo.runId, players, 0, isAlreadyCompleted);
     } catch (error) {
       setState((prev) => ({
         ...prev,
@@ -260,7 +263,8 @@ export function useGameStream() {
   const streamGameData = async (
     runId: string,
     initialPlayers: Player[],
-    attemptNumber: number = 0
+    attemptNumber: number = 0,
+    isAlreadyCompleted: boolean = false
   ): Promise<boolean> => {
     console.log(
       "[Game] Connecting to stream for run:",
@@ -431,6 +435,19 @@ export function useGameStream() {
       return true;
     }
 
+    // For already completed games (viewing old games), don't try to reconnect
+    // The stream just sends historical data and closes - that's expected
+    if (isAlreadyCompleted) {
+      console.log(
+        "[Game] Stream ended for already-completed game - no reconnection needed"
+      );
+      setState((prev) => ({
+        ...prev,
+        phase: "completed",
+      }));
+      return true;
+    }
+
     // Stream ended unexpectedly - try to reconnect
     const nextAttempt = attemptNumber + 1;
     if (nextAttempt < MAX_RECONNECT_ATTEMPTS) {
@@ -448,7 +465,7 @@ export function useGameStream() {
 
       // Attempt reconnection
       try {
-        return await streamGameData(runId, initialPlayers, nextAttempt);
+        return await streamGameData(runId, initialPlayers, nextAttempt, false);
       } catch (reconnectError) {
         console.error("[Game] Reconnect attempt failed:", reconnectError);
         // Fall through to connection lost state
