@@ -130,12 +130,28 @@ export const AI_MODELS = [
     tier: 4,
   },
   {
+    id: "google/gemini-3-flash",
+    name: "Gemini 3 Flash",
+    provider: "Google",
+    input: 0.5,
+    output: 3,
+    tier: 2,
+  },
+  {
     id: "google/gemini-2.5-flash",
     name: "Gemini 2.5 Flash",
     provider: "Google",
     input: 0.3,
     output: 2.5,
     tier: 2,
+  },
+  {
+    id: "google/gemini-2.5-flash-lite",
+    name: "Gemini 2.5 Flash Lite",
+    provider: "Google",
+    input: 0.1,
+    output: 0.4,
+    tier: 1,
   },
   {
     id: "deepseek/deepseek-v3.2-exp-thinking",
